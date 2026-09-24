@@ -1,0 +1,15 @@
+# macOS
+.DS_Store
+
+# Xcode（保留签入的工程文件，只忽略用户级数据）
+xcuserdata/
+**/xcuserdata/
+*.xcuserstate
+DerivedData/
+
+# SwiftPM
+.build/
+.swiftpm/
+
+# SPM 依赖锁（库工程不建议提交）
+Package.resolved

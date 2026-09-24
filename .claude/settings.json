@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(xcodebuild -list)",
+      "Bash(xcodebuild -scheme SwiftBridgeComponents -destination 'platform=iOS Simulator,id=4B3F3F33-104D-4848-B328-449080F36DFE' test)",
+      "Bash(xcodebuild -scheme SwiftBridgeComponents -destination 'generic/platform=iOS Simulator' SWIFT_STRICT_CONCURRENCY=complete build)",
+      "Read(//Users/bo.liu/LINK-Workspace/SwiftChainKit/Sources/**)"
+    ]
+  }
+}
