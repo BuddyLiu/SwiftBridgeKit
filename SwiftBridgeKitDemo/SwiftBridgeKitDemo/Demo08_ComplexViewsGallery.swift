@@ -2,27 +2,37 @@
 //  Demo08_ComplexViewsGallery.swift
 //  SwiftBridgeKitDemo
 //
-//  Demo 08：复杂视图（SwiftBridgeComponents 容器类组件）
+//  Demo 08：复杂视图（SwiftBridgeComponents 容器/导航类组件）
 //
-//  三个收编自 Demo04-06 教学模式的容器组件，各占一节：
-//  List / Grid / Carousel。每节 BridgeHost + 控制区，验证
-//  「下行命令 vs 上行意图」的边界：
+//  三个收编自 Demo04-06 教学模式的容器组件 + 两个导航指标组件，各占一节：
+//  List / Grid / Carousel / PageControl / IndexBar。每节 BridgeHost + 控制区，
+//  验证「下行命令 vs 上行意图」的边界：
 //    · List 动态增删 → diff 早退、不走多余 reload
 //    · Grid diffable → 插入/移动有动画
 //    · Carousel 自动播 → Timer 走弱代理、teardown 停干净；
 //      「跳第 1 页」是下行命令 → 程序化滚动且不反向上报
+//    · PageControl 程序化跳页 → 同理只下行不反向上报
+//    · IndexBar 无手势识别器 → touches 直接驱动，热区换算走纯函数
+//
+//  ⚠️ 组件包的枚举名与 SwiftUI 自带类型撞名（ComponentTone），本页用 `SBTone` 别名消歧。
 //
 //  自检方式：
 //    1. List 点「加一行」→ 行即时出现；不动数据时重绘 → 不触发 reload。
 //    2. Grid 点「加一项/打乱」→ 有插入/移动动画，不是整屏闪。
 //    3. Carousel 开「自动播」→ 每 2 秒换一页，圆点跟随；关掉 → 停住。
 //    4. Carousel 点「跳第 1 页」→ 滚过去但不冒「当前页」更新（下行 ≠ 上行）。
-//    5. 页面静置时控制台不应有组件打印。
+//    5. PageControl 点「跳第 3 页」→ 圆点移动但不冒「当前页」更新（同理）。
+//    6. IndexBar 拖动 → 按字母去重上报、跨字母轻震；松手高亮清除。
+//    7. 页面静置时控制台不应有组件打印。
 //
 
 import SwiftUI
 import SwiftBridgeKit
 import SwiftBridgeComponents
+
+// MARK: - 组件枚举别名（消歧）
+
+private typealias SBTone = SwiftBridgeComponents.ComponentTone
 
 struct Demo08_ComplexViewsGalleryPage: View {
 
@@ -31,6 +41,8 @@ struct Demo08_ComplexViewsGalleryPage: View {
             ListSection()
             GridSection()
             CarouselSection()
+            PageControlSection()
+            IndexBarSection()
 
             Section("自检清单") {
                 Text("· List 动态增删即时刷新、无数据时重绘不 reload")
@@ -38,7 +50,8 @@ struct Demo08_ComplexViewsGalleryPage: View {
                 Text("· Grid diffable 增量：插入/打乱有动画；角标开关全量带出")
                 Text("· Carousel 自动播走弱代理 Timer，翻页圆点跟随")
                 Text("· 无限轮播开 → 首尾无缝、永不到头；关 → 会回弹")
-                Text("· 下行命令（跳页）不反向上报，上行（滑动/自动播）才同步")
+                Text("· 下行命令（Carousel/PageControl 跳页）不反向上报")
+                Text("· IndexBar 拖动按字母去重上报、跨字母轻震")
                 Text("· 静置时控制台无组件日志")
             }
             .font(.footnote)
@@ -211,6 +224,123 @@ private struct CarouselSection: View {
             LabeledContent("翻页累计", value: "\(timerTickCount)")
             LabeledContent("点过的页", value: lastTapped)
             Text("自检：开自动播后可放任不管——页永远换不完、圆点 0↔2 来回；关无限 → 到第 3 页回弹。")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+        }
+    }
+}
+
+// MARK: - PageControl
+
+private struct PageControlSection: View {
+    @State private var pageCount = 5
+    @State private var currentPage = 0
+    @State private var tone: SBTone = .neutral
+    @State private var currentTone: SBTone = .primary
+    @State private var hidesForSinglePage = true
+    @State private var isEnabled = true
+    @State private var pageFromIntent = -1
+
+    var body: some View {
+        Section("PageControl（分页点）") {
+            BridgeHost(
+                state: PageControlState(
+                    pageCount: pageCount,
+                    currentPage: currentPage,
+                    tone: tone,
+                    currentTone: currentTone,
+                    hidesForSinglePage: hidesForSinglePage,
+                    isEnabled: isEnabled
+                ),
+                makeView: { PageControlBridgeView() },
+                onIntent: { intent in
+                    switch intent {
+                    case .pageChanged(let page): pageFromIntent = page   // 只来自用户点圆点
+                    }
+                }
+            )
+            .listRowInsets(EdgeInsets())
+
+            Stepper("页数：\(pageCount)", value: $pageCount, in: 0...8)
+            // 下行命令：程序化赋值 currentPage → 不触发 valueChanged → 不反向上报
+            Button("下行命令：跳第 3 页") { currentPage = 2 }
+
+            Picker("未选圆点", selection: $tone) {
+                ForEach(SBTone.allCases, id: \.self) { Text(verbatim: "\($0)") }
+            }
+            .pickerStyle(.menu)
+
+            Picker("选中圆点", selection: $currentTone) {
+                ForEach(SBTone.allCases, id: \.self) { Text(verbatim: "\($0)") }
+            }
+            .pickerStyle(.menu)
+
+            Toggle("单页自动隐藏", isOn: $hidesForSinglePage)
+            Toggle("可用", isOn: $isEnabled)
+            LabeledContent("上行当前页", value: pageFromIntent < 0 ? "(尚无)" : "\(pageFromIntent)")
+            Text("自检：点「跳第 3 页」→ 圆点移动但上行当前页不变（下行 ≠ 上行）。")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+        }
+    }
+}
+
+// MARK: - IndexBar
+
+private struct IndexBarSection: View {
+    @State private var items = Array("ABCDEFGHIJKLMNOPQRSTUVWXYZ").map(String.init)
+    @State private var tone: SBTone = .neutral
+    @State private var activeTone: SBTone = .primary
+    @State private var isEnabled = true
+    @State private var lastLetter = "—"
+
+    var body: some View {
+        Section("IndexBar（字母索引）") {
+            HStack(spacing: 16) {
+                // 右缘窄条：高由外部 frame 给，宽走 intrinsic
+                BridgeHost(
+                    state: IndexBarState(
+                        items: items,
+                        tone: tone,
+                        activeTone: activeTone,
+                        isEnabled: isEnabled
+                    ),
+                    makeView: { IndexBarBridgeView() },
+                    onIntent: { intent in
+                        switch intent {
+                        case .changed(let letter): lastLetter = letter
+                        }
+                    }
+                )
+                .frame(height: 300)
+
+                Spacer(minLength: 0)
+                VStack(alignment: .trailing, spacing: 8) {
+                    Text("当前")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                    Text(lastLetter)
+                        .font(.title2.bold())
+                }
+            }
+            .listRowInsets(EdgeInsets())
+
+            // 换一版自定义条目 → apply 重建 label 栈（默认 A–Z 之外的自绘验证）
+            Button("换成中文字首「张李王赵」") { items = ["张", "李", "王", "赵"] }
+
+            Picker("常态字色", selection: $tone) {
+                ForEach(SBTone.allCases, id: \.self) { Text(verbatim: "\($0)") }
+            }
+            .pickerStyle(.menu)
+
+            Picker("高亮字色", selection: $activeTone) {
+                ForEach(SBTone.allCases, id: \.self) { Text(verbatim: "\($0)") }
+            }
+            .pickerStyle(.menu)
+
+            Toggle("可用", isOn: $isEnabled)
+            LabeledContent("最近字母", value: lastLetter)
+            Text("自检：拖动索引条 → 跨字母才上报 + 轻震；松手高亮清除。")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
         }

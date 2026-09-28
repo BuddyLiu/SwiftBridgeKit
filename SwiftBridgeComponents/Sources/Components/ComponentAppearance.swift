@@ -65,6 +65,16 @@ public enum RatingStarTone: Hashable, CaseIterable {
     case system, gold, purple, teal, pink
 }
 
+/// 日期选择器模式（纯值，映射到 UIDatePicker.Mode）。
+public enum DatePickerKind: Hashable, CaseIterable {
+    case date, time, dateAndTime, countDown
+}
+
+/// 加载指示器尺寸（纯值，映射到 UIActivityIndicatorView.Style）。
+public enum ActivityIndicatorSize: Hashable, CaseIterable {
+    case medium, large
+}
+
 // MARK: - UIKit 映射（internal，仅本模块视图用）
 
 enum ComponentPalette {
@@ -129,6 +139,16 @@ enum ComponentTypography {
 
     static func fieldFont() -> UIFont {
         .systemFont(ofSize: 15)
+    }
+
+    /// 验证码格内字符：20 号 semibold。
+    static func otpFont() -> UIFont {
+        .systemFont(ofSize: 20, weight: .semibold)
+    }
+
+    /// 字母索引条字符：10 号 medium。
+    static func indexBarFont() -> UIFont {
+        .systemFont(ofSize: 10, weight: .medium)
     }
 
     static func initialsFont(dimension: CGFloat) -> UIFont {
@@ -211,6 +231,19 @@ enum ComponentMetrics {
 
     static func fieldHeight() -> CGFloat { 48 }
 
+    /// 多行输入框（TextView）高度基线。
+    static func textViewHeight() -> CGFloat { 100 }
+
+    // OTPField（验证码格子）
+    static func otpBoxSize() -> CGFloat { 44 }
+    static func otpBoxSpacing() -> CGFloat { 10 }
+
+    // IndexBar（字母索引条宽）
+    static func indexBarWidth() -> CGFloat { 22 }
+
+    // PickerWheel（UIPickerView 无 intrinsic，固定轮盘高）
+    static func pickerWheelHeight() -> CGFloat { 216 }
+
     static func chipHeight() -> CGFloat { 32 }
     static func chipPaddingX() -> CGFloat { 16 }
     static func chipIconSize() -> CGFloat { 16 }
@@ -249,6 +282,28 @@ extension KeyboardKind {
         case .decimalPad: return .decimalPad
         case .phone:      return .phonePad
         case .url:        return .URL
+        }
+    }
+}
+
+extension DatePickerKind {
+    /// 纯值枚举 → UIDatePicker.Mode（apply 时翻译）。
+    var uiMode: UIDatePicker.Mode {
+        switch self {
+        case .date:        return .date
+        case .time:        return .time
+        case .dateAndTime: return .dateAndTime
+        case .countDown:   return .countDownTimer
+        }
+    }
+}
+
+extension ActivityIndicatorSize {
+    /// 纯值枚举 → UIActivityIndicatorView.Style（apply 时翻译）。
+    var uiStyle: UIActivityIndicatorView.Style {
+        switch self {
+        case .medium: return .medium
+        case .large:  return .large
         }
     }
 }

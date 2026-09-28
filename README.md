@@ -16,7 +16,7 @@ SwiftBridgeKit/
 │   ├── Sources/…            BridgeView / BridgeCoordinator / BridgeGuard / SizedBridge…
 │   └── Docs/08_接入检查表.md  组件接入八步法
 ├── SwiftChainKit/           点语法链式配置 UIKit 的 DSL（SPM，零依赖，仅 iOS）
-├── SwiftBridgeComponents/   SwiftUI 组件库（SPM，17 个组件）
+├── SwiftBridgeComponents/   SwiftUI 组件库（SPM，25 个组件）
 ├── SwiftBridgeKitDemo/      Demo 工程（.xcodeproj）—— 09 个可运行教学页
 ├── Vendor/SnapKit/          SnapKit 本地 vendored（离线也能完整构建）
 └── scripts/verify.sh        双包验证脚本：自动挑模拟器 → 编译 + 全量单测
@@ -28,7 +28,7 @@ SwiftBridgeKit/
 |---|---|---|
 | **SwiftBridgeKit** | 桥接契约与运行时 | `State` 单向下行、`Intent` 单向上报、`BridgeGuard` 抑制更新环、`SizedBridge` 异步尺寸回流、`teardown` 生命周期收口 |
 | **SwiftChainKit** | UIKit 视图创建 | 把 `titleLabel.text=…; titleLabel.font=…; addSubview…` 的 boilerplate 收成 `.chain().text(_:).font(_:).added(to:).build()`，保型不断 |
-| **SwiftBridgeComponents** | 现成组件 | Avatar / Badge / Button / Carousel / Chip / EmptyState / Grid / List / Notice / ProgressBar / Rating / SearchField / Segmented / Slider / Switch / TextField / Toast |
+| **SwiftBridgeComponents** | 现成组件 | Avatar / Badge / Button / Carousel / Chip / DatePicker / EmptyState / Grid / IndexBar / List / Notice / OTPField / PageControl / PickerWheel / ProgressBar / Rating / SearchField / Segmented / Slider / Stepper / Switch / TextField / TextView / Toast / ActivityIndicator |
 
 分层而不是一个大库：**桥接层**只做适配、不背业务状态；**链式层**只管配置 DSL、不做布局魔法；**组件层**才谈得上「组件」。—— 三层职责互不渗透，各自可独立使用。
 
@@ -91,6 +91,7 @@ Demo 工程通过 `XCLocalSwiftPackageReference` 以本地 path 引用三个包�
 ## 相关文档
 
 - [SwiftBridgeKit/README.md](SwiftBridgeKit/README.md) —— 桥接核心四件设施详解 + 组件接入最小用法
+- [SwiftBridgeComponents/README.md](SwiftBridgeComponents/README.md) —— 25 个组件总表 + 分层设计约定 + 接入样例
 - [SwiftChainKit/README.md](SwiftChainKit/README.md) —— 链库设计思路（含与 ZZFLEX 的对比）+ 支持类型清单
 - [SwiftBridgeKit/Docs/08_接入检查表.md](SwiftBridgeKit/Docs/08_接入检查表.md) —— 接入八步法 Checklist
 

@@ -4,7 +4,7 @@
 //
 //  Demo 07：组件库（SwiftBridgeComponents）
 //
-//  五个开箱即用组件各占一节：BridgeHost 渲染 UIKit 视图，
+//  每个开箱即用组件各占一节：BridgeHost 渲染 UIKit 视图，
 //  下方控制区用 Picker / Toggle / Slider 热切换契约枚举 ——
 //  每次切换都走「值比较早退 → 差异映射」，不做全量重建。
 //
@@ -14,8 +14,12 @@
 //  自检方式：
 //    1. 切换各 Picker / Toggle，视觉应即时跟随、无闪烁。
 //    2. TextField 区点「外部注入」：正在编辑时光标不被打断。
-//    3. Button 区开「加载中」：显示菊花、按钮强制禁用。
-//    4. 页面静置时控制台不应有组件打印。
+//    3. TextView 区清空文本看占位符、正在输入时注入不抢光标。
+//    4. Stepper 点「外部注入」：程序化回写不产生多余意图。
+//    5. OTP 填满 N 位 → 自动收键盘并回调 completed；外部注入不抢焦点。
+//    6. PickerWheel 滚轮上报行号；外部重置不产生 changed 意图。
+//    7. Button 区开「加载中」：显示菊花、按钮强制禁用。
+//    8. 页面静置时控制台不应有组件打印。
 //
 
 import SwiftUI
@@ -32,6 +36,8 @@ private typealias SBBadgeShape = SwiftBridgeComponents.BadgeShape
 private typealias SBAvatarShape = SwiftBridgeComponents.AvatarShape
 private typealias SBTextFieldBorder = SwiftBridgeComponents.TextFieldBorder
 private typealias SBKeyboardKind = SwiftBridgeComponents.KeyboardKind
+private typealias SBDDatePickerKind = SwiftBridgeComponents.DatePickerKind
+private typealias SBActivityIndicatorSize = SwiftBridgeComponents.ActivityIndicatorSize
 private typealias SBTone = SwiftBridgeComponents.ComponentTone
 private typealias SBStarTone = SwiftBridgeComponents.RatingStarTone
 
@@ -46,6 +52,12 @@ struct Demo07_ComponentsGalleryPage: View {
             ButtonSection()
             ChipSection()
             TextFieldSection()
+            StepperSection()
+            DatePickerSection()
+            TextViewSection()
+            ActivityIndicatorSection()
+            OTPFieldSection()
+            PickerWheelSection()
             BadgeSection()
             AvatarSection()
             RatingSection()
@@ -55,6 +67,13 @@ struct Demo07_ComponentsGalleryPage: View {
             Section("自检清单") {
                 Text("· 枚举 Picker 热切换 → 视图即时更新（差异映射）")
                 Text("· TextField 输入时点「外部注入」→ 光标不被打断")
+                Text("· TextView 占位符仅空态显示（清空文本后才出现）")
+                Text("· TextView 正在输入时注入文本 → 不抢光标")
+                Text("· Stepper 点「外部注入：设值为 7」→ 程序化回写不闭环")
+                Text("· DatePicker 切到 countDown → 显示倒计时时长而非日期")
+                Text("· OTP 填满 N 位 → 自动收键盘并回调 completed")
+                Text("· OTP 正在输入时外部注入 → 不抢焦点")
+                Text("· PickerWheel 外部重置行号 → 不触发 changed 意图")
                 Text("· Button「加载中」→ 菊花 + 强制禁用")
                 Text("· Switch/Segmented/Slider 拖拽时外部注入不打断手势")
                 Text("· Chip 点击上报、选中态由业务回写")
@@ -580,6 +599,308 @@ private struct EmptyStateSection: View {
             LabeledContent("主按钮点击次数", value: "\(actionCount)")
             LabeledContent("次级点击次数", value: "\(secondaryCount)")
         }
+    }
+}
+
+// MARK: - Stepper
+
+private struct StepperSection: View {
+    @State private var value: Double = 3
+    @State private var tone: SBTone = .primary
+    @State private var wraps = false
+    @State private var autorepeat = true
+    @State private var isEnabled = true
+    @State private var lastIntent = "—"
+
+    var body: some View {
+        Section("Stepper") {
+            BridgeHost(
+                state: StepperState(
+                    value: value,
+                    min: 0,
+                    max: 10,
+                    step: 1,
+                    wraps: wraps,
+                    autorepeat: autorepeat,
+                    tone: tone,
+                    isEnabled: isEnabled
+                ),
+                makeView: { StepperBridgeView() },
+                onIntent: { intent in
+                    switch intent {
+                    case .changed(let v):
+                        value = v
+                        lastIntent = "changed(\(Int(v)))"
+                    }
+                }
+            )
+            .listRowInsets(EdgeInsets())
+
+            Picker("色调", selection: $tone) {
+                ForEach(SBTone.allCases, id: \.self) { Text(verbatim: "\($0)") }
+            }
+            .pickerStyle(.menu)
+
+            Toggle("回绕（到界再按回绕）", isOn: $wraps)
+            Toggle("长按连发", isOn: $autorepeat)
+            Toggle("可用", isOn: $isEnabled)
+            LabeledContent("当前值", value: "\(Int(value))")
+            LabeledContent("最近意图", value: lastIntent)
+            // 程序化回写验证：改 state 不触发 valueChanged → 不产生多余意图
+            Button("外部注入：设值为 7") { value = 7 }
+        }
+    }
+}
+
+// MARK: - DatePicker
+
+private struct DatePickerSection: View {
+    @State private var date = Date()
+    @State private var kind: SBDDatePickerKind = .date
+    @State private var tone: SBTone = .primary
+    @State private var isEnabled = true
+    @State private var countDownDuration: TimeInterval = 300
+
+    var body: some View {
+        Section("DatePicker") {
+            BridgeHost(
+                state: DatePickerState(
+                    date: date,
+                    kind: kind,
+                    countDownDuration: countDownDuration,
+                    tone: tone,
+                    isEnabled: isEnabled
+                ),
+                makeView: { DatePickerBridgeView() },
+                onIntent: { intent in
+                    switch intent {
+                    case .changed(let d): date = d
+                    case .countDownChanged(let t): countDownDuration = t
+                    }
+                }
+            )
+            .listRowInsets(EdgeInsets())
+
+            Picker("模式", selection: $kind) {
+                ForEach(SBDDatePickerKind.allCases, id: \.self) { Text(verbatim: "\($0)") }
+            }
+            .pickerStyle(.menu)
+
+            Picker("色调", selection: $tone) {
+                ForEach(SBTone.allCases, id: \.self) { Text(verbatim: "\($0)") }
+            }
+            .pickerStyle(.menu)
+
+            Toggle("可用", isOn: $isEnabled)
+            LabeledContent("日期", value: date.formatted(date: .abbreviated, time: .shortened))
+            LabeledContent("倒计时", value: "\(Int(countDownDuration))s")
+            Button("恢复默认：今天 / 300s") {
+                date = Date()
+                countDownDuration = 300
+            }
+        }
+    }
+}
+
+// MARK: - TextView
+
+private struct TextViewSection: View {
+    @State private var text = "多行输入框：回车是换行，没有提交键"
+    @State private var showsPlaceholder = true
+    @State private var border: SBTextFieldBorder = .roundedRect
+    @State private var tone: SBTone = .neutral
+    @State private var isEditable = true
+    @State private var maxLength: Int?
+
+    var body: some View {
+        Section("TextView") {
+            BridgeHost(
+                state: TextViewState(
+                    text: text,
+                    placeholder: showsPlaceholder ? "请输入多行内容…" : "",
+                    placeholderTone: tone,
+                    border: border,
+                    keyboard: .standard,
+                    isEditable: isEditable,
+                    maxLength: maxLength
+                ),
+                // ⚠️ Demo03 在本模块里也定义了 TextViewBridgeView（教学内联版），
+                //    同模块声明遮蔽 import，必须模块限定指到组件包版本。
+                makeView: { SwiftBridgeComponents.TextViewBridgeView() },
+                onIntent: { intent in
+                    switch intent {
+                    case .textChanged(let value): text = value
+                    }
+                }
+            )
+            .listRowInsets(EdgeInsets())
+
+            // 输入保护验证：清空后占位符出现；正在编辑时注入不抢光标
+            Button("外部注入：清空文本") { text = "" }
+
+            Toggle("显示占位符", isOn: $showsPlaceholder)
+            Picker("边框", selection: $border) {
+                ForEach(SBTextFieldBorder.allCases, id: \.self) { Text(verbatim: "\($0)") }
+            }
+            .pickerStyle(.segmented)
+
+            Stepper("最大长度：\(maxLength.map(String.init) ?? "不限")", value: Binding(
+                get: { maxLength ?? 0 },
+                set: { maxLength = $0 == 0 ? nil : $0 }
+            ), in: 0...80)
+
+            Toggle("可编辑", isOn: $isEditable)
+            LabeledContent("字数", value: "\(text.count)")
+        }
+    }
+}
+
+// MARK: - ActivityIndicator
+
+private struct ActivityIndicatorSection: View {
+    @State private var isAnimating = true
+    @State private var size: SBActivityIndicatorSize = .medium
+    @State private var tone: SBTone = .primary
+    @State private var hidesWhenStopped = true
+
+    var body: some View {
+        Section("ActivityIndicator") {
+            HStack {
+                Spacer(minLength: 0)
+                BridgeHost(
+                    state: ActivityIndicatorState(
+                        isAnimating: isAnimating,
+                        size: size,
+                        tone: tone,
+                        hidesWhenStopped: hidesWhenStopped
+                    ),
+                    makeView: { ActivityIndicatorBridgeView() },
+                    onIntent: { _ in }
+                )
+                Spacer(minLength: 0)
+            }
+            .listRowInsets(EdgeInsets())
+
+            Toggle("转动", isOn: $isAnimating)
+            Picker("尺寸", selection: $size) {
+                ForEach(SBActivityIndicatorSize.allCases, id: \.self) { Text(verbatim: "\($0)") }
+            }
+            .pickerStyle(.segmented)
+
+            Picker("色调", selection: $tone) {
+                ForEach(SBTone.allCases, id: \.self) { Text(verbatim: "\($0)") }
+            }
+            .pickerStyle(.menu)
+
+            Toggle("停止时隐藏（仍占位）", isOn: $hidesWhenStopped)
+        }
+    }
+}
+
+// MARK: - OTPField
+
+private struct OTPFieldSection: View {
+    @State private var codeLength = 6
+    @State private var value = ""
+    @State private var tone: SBTone = .primary
+    @State private var isSecure = false
+    @State private var isEnabled = true
+    @State private var lastIntent = "—"
+
+    var body: some View {
+        Section("OTPField（验证码）") {
+            // 居中窄条：intrinsic 宽度随格数，HStack Spacer 保持居中
+            HStack {
+                Spacer(minLength: 0)
+                BridgeHost(
+                    state: OTPFieldState(
+                        codeLength: codeLength,
+                        value: value,
+                        tone: tone,
+                        isSecure: isSecure,
+                        isEnabled: isEnabled
+                    ),
+                    makeView: { OTPFieldBridgeView() },
+                    onIntent: { intent in
+                        switch intent {
+                        case .changed(let v):
+                            value = v
+                            lastIntent = "changed(\(v))"
+                        case .completed(let v):
+                            value = v
+                            lastIntent = "completed(\(v))"
+                        }
+                    }
+                )
+                Spacer(minLength: 0)
+            }
+            .listRowInsets(EdgeInsets())
+
+            // 输入保护验证：外部注入全文；正在编辑时不抢焦点
+            Button("外部注入：填充「1234」") { value = "1234" }
+            Button("清空") { value = "" }
+
+            Stepper("格数：\(codeLength)", value: $codeLength, in: 4...8)
+            Picker("色调", selection: $tone) {
+                ForEach(SBTone.allCases, id: \.self) { Text(verbatim: "\($0)") }
+            }
+            .pickerStyle(.menu)
+
+            Toggle("遮盖显示（●）", isOn: $isSecure)
+            Toggle("可用", isOn: $isEnabled)
+            LabeledContent("全文", value: value.isEmpty ? "(空)" : value)
+            LabeledContent("最近意图", value: lastIntent)
+        }
+    }
+}
+
+// MARK: - PickerWheel
+
+private struct PickerWheelSection: View {
+    private let components = [["红", "绿", "蓝", "紫"], ["大", "中", "小"]]
+    @State private var selectedRows = [0, 0]
+    @State private var tone: SBTone = .primary
+    @State private var isEnabled = true
+    @State private var lastIntent = "—"
+
+    var body: some View {
+        Section("PickerWheel（滚轮）") {
+            BridgeHost(
+                state: PickerWheelState(
+                    components: components,
+                    selectedRows: selectedRows,
+                    tone: tone,
+                    isEnabled: isEnabled
+                ),
+                makeView: { PickerWheelBridgeView() },
+                onIntent: { intent in
+                    switch intent {
+                    case .changed(let rows):
+                        selectedRows = rows
+                        lastIntent = rows.description
+                    }
+                }
+            )
+            .frame(height: 216)
+            .listRowInsets(EdgeInsets())
+
+            Picker("色调", selection: $tone) {
+                ForEach(SBTone.allCases, id: \.self) { Text(verbatim: "\($0)") }
+            }
+            .pickerStyle(.menu)
+
+            Toggle("可用", isOn: $isEnabled)
+            LabeledContent("选中", value: selectedText)
+            LabeledContent("最近意图", value: lastIntent)
+            // 程序化 selectRow 验证：改 state 不触发 didSelectRow → 不产生多余意图
+            Button("外部重置：回 0 / 0") { selectedRows = [0, 0] }
+        }
+    }
+
+    private var selectedText: String {
+        zip(components, selectedRows).map { col, row in
+            col.indices.contains(row) ? col[row] : "—"
+        }.joined(separator: " / ")
     }
 }
 
