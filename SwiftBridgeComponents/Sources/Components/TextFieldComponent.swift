@@ -106,6 +106,11 @@ public final class TextFieldBridgeView: UIView, BridgeView, UITextFieldDelegate 
     /// 意图回调：用户输入变化 / 回车提交在此上报给宿主。
     public var onIntent: ((TextFieldIntent) -> Void)?
 
+    /// 每桥主题覆盖（运行时换肤）。nil = 回落全局 `ComponentTheme.current`。
+    /// 必须有真实存储（不能用协议默认空实现）：否则 coordinator 下行 `view.theme = theme`
+    /// 被丢弃，resolvedTheme() 永远读到 nil → 每桥 override 不生效（Rating 同款坑）。
+    public var theme: (any BridgeTheme)?
+
     /// internal（非 private）：留给 @testable 冒烟测试校验占位符回写 / 无障碍 label。
     let field = UITextField()
     private let underline = CALayer()

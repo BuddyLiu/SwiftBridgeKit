@@ -247,6 +247,16 @@ enum ComponentMetrics {
     // ProgressBar
     static func progressBarHeight() -> CGFloat { 6 }
 
+    // Checkbox / RadioGroup（选择行基线）
+    static func checkboxRowHeight() -> CGFloat { 44 }
+    static func radioRowHeight() -> CGFloat { 40 }
+    static func checkboxBoxSize() -> CGFloat { 22 }
+    static func radioIconSize() -> CGFloat { 22 }
+
+    // StepIndicator / Sparkline（绘制型展示组件基线高）
+    static func stepIndicatorHeight() -> CGFloat { 56 }
+    static func sparklineHeight() -> CGFloat { 56 }
+
     // Toast
     static func toastCardHeight() -> CGFloat { 48 }
     static func toastCornerRadius() -> CGFloat { 12 }

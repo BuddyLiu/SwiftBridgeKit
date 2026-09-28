@@ -83,6 +83,11 @@ public final class OTPFieldBridgeView: UIView, BridgeView, UITextFieldDelegate {
     /// 意图上抛回调：全文变化 / 满格完成。
     public var onIntent: ((OTPFieldIntent) -> Void)?
 
+    /// 每桥主题覆盖（运行时换肤）。nil = 回落全局 `ComponentTheme.current`。
+    /// 必须有真实存储（不能用协议默认空实现）：否则 coordinator 下行 `view.theme = theme`
+    /// 被丢弃，resolvedTheme() 永远读到 nil → 每桥 override 不生效（Rating 同款坑）。
+    public var theme: (any BridgeTheme)?
+
     /// internal（非 private）：留给 @testable 冒烟测试校验 apply 回写用。
     let field = UITextField()
     private var boxes: [UIView] = []

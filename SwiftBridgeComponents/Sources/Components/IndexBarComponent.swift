@@ -90,6 +90,11 @@ public final class IndexBarBridgeView: UIView, BridgeView {
     /// 意图上抛回调：当前高亮条目。
     public var onIntent: ((IndexBarIntent) -> Void)?
 
+    /// 每桥主题覆盖（运行时换肤）。nil = 回落全局 `ComponentTheme.current`。
+    /// 必须有真实存储（不能用协议默认空实现）：否则 coordinator 下行 `view.theme = theme`
+    /// 被丢弃，resolvedTheme() 永远读到 nil → 每桥 override 不生效（Rating 同款坑）。
+    public var theme: (any BridgeTheme)?
+
     /// internal（非 private）：留给 @testable 冒烟测试校验 apply 重建 label 栈用。
     var itemLabels: [UILabel] { labels }
     private var labels: [UILabel] = []

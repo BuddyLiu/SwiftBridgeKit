@@ -39,6 +39,7 @@ struct SwiftBridgeKitDemoApp: App {
         case 8: Demo08_ComplexViewsGalleryPage()
         case 9: Demo09_ExtendedGalleryPage()
         case 10: Demo10_FacilitiesGalleryPage()
+        case 11: Demo11_SelectionMetricsGalleryPage()
         default: DemoList()
         }
     }
@@ -69,7 +70,7 @@ struct DemoList: View {
                 }
             }
 
-            Section("组件库（07–10）") {
+            Section("组件库（07–11）") {
                 NavigationLink("07 · 组件库（SwiftBridgeComponents）") {
                     Demo07_ComponentsGalleryPage()
                 }
@@ -81,6 +82,9 @@ struct DemoList: View {
                 }
                 NavigationLink("10 · 三项设施（主题 / 无障碍 / 弹层）") {
                     Demo10_FacilitiesGalleryPage()
+                }
+                NavigationLink("11 · 选择与指标（Checkbox / RadioGroup / StepIndicator / Sparkline）") {
+                    Demo11_SelectionMetricsGalleryPage()
                 }
             }
         }

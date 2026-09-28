@@ -5,23 +5,24 @@ SwiftChainKit 的链式配置，每个组件 = **纯值契约层 + 桥视图 + �
 
 > 定位一句话：**分层复用，不开新写法**。业务侧面向纯值 `State`/`Intent`，
 > 视图侧沿用同一套 `apply(差分) / onIntent(上报) / teardown(收口)` 纪律，
-> 组件库只是把这条纪律做成了 28 个开箱即用的剖面。
+> 组件库只是把这条纪律做成了 32 个开箱即用的剖面。
 
-## 组件总表（28 个）
+## 组件总表（32 个）
 
 | 分类 | 组件 | 一句话 |
 |---|---|---|
-| 展示 | Avatar · Badge · Notice · EmptyState · Toast · ActivityIndicator | 头像徽章、通知回复，纯展示为主 |
+| 展示 | Avatar · Badge · Notice · EmptyState · Toast · ActivityIndicator · **StepIndicator** · **Sparkline** | 头像徽章、通知回复、步骤条、迷你趋势图，纯展示为主 |
 | 表单 | TextField · TextView · SearchField · Stepper · Slider · DatePicker · **OTPField** · **PickerWheel** | 输入 / 步进 / 日期 / 验证码 / 滚轮，含输入保护 |
-| 选择 | Switch · Segmented · Chip · Rating | 单项/多项选择，选中态由业务回写 |
+| 选择 | Switch · Segmented · Chip · Rating · **Checkbox** · **RadioGroup** | 单项/多项选择，选中态由业务回写 |
 | 容器 | List · Grid · Carousel · **PageControl** · **IndexBar** | 复用池 + diffable 增量动画 + 无限轮播 + 分页指标 |
 | 按钮 | Button | 五式三号，含加载态 |
 | 进度 | ProgressBar | 确定 / 不确定两种 |
 | 弹层 | **Dialog** · **ActionSheet** · **BottomSheet** | 弹层容器三件套：动作确认 / 底部动作表 / 连续选择 |
 
-（分三批共新增 11 个：第一批 Stepper / DatePicker / TextView / ActivityIndicator，
+（分批共新增 15 个：第一批 Stepper / DatePicker / TextView / ActivityIndicator，
 第二批 OTPField / PickerWheel / PageControl / IndexBar，第三批 Dialog / ActionSheet /
-BottomSheet。SwiftBridgeComponents 依赖 SwiftBridgeKit 与 SwiftChainKit 两个本地包。）
+BottomSheet，第四批 Checkbox / RadioGroup / StepIndicator / Sparkline。
+SwiftBridgeComponents 依赖 SwiftBridgeKit 与 SwiftChainKit 两个本地包。）
 
 ## 设计约定
 
@@ -81,18 +82,21 @@ struct SomeForm: View {
 验证走 iOS 模拟器：
 
 ```bash
-# 本包全量单测（97 例）
+# 本包全量单测（110 例）
 cd SwiftBridgeComponents
 xcodebuild test -scheme SwiftBridgeComponents \
   -destination 'platform=iOS Simulator,id=4B3F3F33-104D-4848-B328-449080F36DFE'
 ```
 
 - `SWIFT_STRICT_CONCURRENCY=complete` 构建零告警（仅为保持与兄弟包的承诺）；
-- Demo 工程四页分别对应：**07 基础组件** / **08 容器与导航**（List/Grid/Carousel + PageControl/IndexBar）/
-  **09 扩展组件**（Progress/Search/Toast）/ **10 三项设施**（主题 / 无障碍 / 弹层），批量新增组件已同步进 07 与 08；
+- Demo 工程五页分别对应：**07 基础组件** / **08 容器与导航**（List/Grid/Carousel + PageControl/IndexBar）/
+  **09 扩展组件**（Progress/Search/Toast）/ **10 三项设施**（主题 / 无障碍 / 弹层）/
+  **11 选择与指标**（Checkbox / RadioGroup / StepIndicator / Sparkline），批量新增组件已同步进 07 与 08；
 - 契约层钳制逻辑（Rating 越界、DatePicker 倒计时取 60 的倍数、ProgressBar [0,1]、
-  OTPField 格数 4…8、PickerWheel 选中行逐列钳制、IndexBar 热区换算…）均有纯函数单测，
-  越界值进不到 UIKit。
+  OTPField 格数 4…8、PickerWheel 选中行逐列钳制、IndexBar 热区换算、StepIndicator
+  currentIndex 收进 0…count-1…）均有纯函数单测，越界值进不到 UIKit；
+- 交互语义验收（Checkbox 点按 / RadioGroup 换选）走 internal fire-* 测试钩子直连
+  手势逻辑 —— 无头模拟器不派发 UIControl target-action（见 Overlay 组件同款约定）。
 
 ## 相关
 

@@ -100,6 +100,11 @@ public final class RatingBridgeView: UIView, BridgeView {
     /// 事件上报通道：`.changed(分值)`，同一档去重。
     public var onIntent: ((RatingIntent) -> Void)?
 
+    /// 每桥主题覆盖（运行时换肤）。nil = 回落全局 `ComponentTheme.current`。
+    /// 必须有真实存储（不能用协议默认空实现）：coordinator 下行时 `view.theme = theme`，
+    /// 无存储的话写进去被丢弃，draw 里的 resolvedTheme() 永远读到 nil → override 不生效。
+    public var theme: (any BridgeTheme)?
+
     // 呈现态缓存：只是上次快照，不是第二真相源
     private var rating: Double = 0
     private var starCount: Int = 5

@@ -237,7 +237,9 @@ public struct ComponentTheme: BridgeTheme {
 
 extension ComponentPaletteConfiguration {
 
-    /// 品牌主题：primary 换紫、danger 换酒红、star 换金（其余沿用系统语义色）。
+    /// 品牌主题：primary 换紫、danger 换酒红、star 换金，**五式按钮同步换**
+    /// （buttonPrimary 等若不覆写，Button 系列在品牌模式下仍是系统蓝 ——
+    /// 主题「没生效」的观感即来自这里：tone 系变色了、按钮没变）。
     public static var brand: ComponentPaletteConfiguration {
         ComponentPaletteConfiguration(
             primary: DynamicColor(
@@ -246,6 +248,29 @@ extension ComponentPaletteConfiguration {
             danger: DynamicColor(
                 light: UIColor(red: 0.70, green: 0.18, blue: 0.24, alpha: 1),
                 dark: UIColor(red: 0.92, green: 0.40, blue: 0.46, alpha: 1)),
+            buttonPrimary: ButtonThemeColors(
+                background: DynamicColor(
+                    light: UIColor(red: 0.52, green: 0.36, blue: 0.95, alpha: 1),
+                    dark: UIColor(red: 0.72, green: 0.58, blue: 1.0, alpha: 1)),
+                foreground: DynamicColor(.white)),
+            buttonOutline: ButtonThemeColors(
+                background: DynamicColor(.clear),
+                foreground: DynamicColor(
+                    light: UIColor(red: 0.52, green: 0.36, blue: 0.95, alpha: 1),
+                    dark: UIColor(red: 0.72, green: 0.58, blue: 1.0, alpha: 1))),
+            buttonGhost: ButtonThemeColors(
+                background: DynamicColor(.clear),
+                foreground: DynamicColor(
+                    light: UIColor(red: 0.52, green: 0.36, blue: 0.95, alpha: 1),
+                    dark: UIColor(red: 0.72, green: 0.58, blue: 1.0, alpha: 1))),
+            buttonDanger: ButtonThemeColors(
+                background: DynamicColor(
+                    light: UIColor(red: 0.70, green: 0.18, blue: 0.24, alpha: 1),
+                    dark: UIColor(red: 0.92, green: 0.40, blue: 0.46, alpha: 1)),
+                foreground: DynamicColor(.white)),
+            buttonOutlineColor: DynamicColor(
+                light: UIColor(red: 0.52, green: 0.36, blue: 0.95, alpha: 1),
+                dark: UIColor(red: 0.72, green: 0.58, blue: 1.0, alpha: 1)),
             starGold: DynamicColor(
                 light: UIColor(red: 0.96, green: 0.70, blue: 0.20, alpha: 1),
                 dark: UIColor(red: 0.98, green: 0.80, blue: 0.34, alpha: 1))

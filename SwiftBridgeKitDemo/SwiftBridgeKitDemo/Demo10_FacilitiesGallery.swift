@@ -120,7 +120,8 @@ private struct ThemeSection: View {
             .listRowInsets(EdgeInsets())
 
             BridgeHost(
-                state: RatingState(rating: rating, starCount: 5, isEnabled: true),
+                state: RatingState(rating: rating, starCount: 5, isEnabled: true,
+                                   starTone: .gold),
                 makeView: { RatingBridgeView() },
                 onIntent: { if case .changed(let v) = $0 { rating = v } },
                 theme: choice.theme

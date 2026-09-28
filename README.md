@@ -1,6 +1,6 @@
 # SwiftBridgeKit — SwiftUI ↔ UIKit 桥接实践
 
-一套「SwiftUI 与 UIKit 共处一屏」的完整方案落地：**桥接核心库 + UIKit 链式 DSL + 组件库 + 10 个可运行教学 Demo**，外加离线可用的验证脚本。
+一套「SwiftUI 与 UIKit 共处一屏」的完整方案落地：**桥接核心库 + UIKit 链式 DSL + 组件库 + 11 个可运行教学 Demo**，外加离线可用的验证脚本。
 
 > 一句话定位：**职责薄、能力厚、数量少。**
 > 有 SwiftUI 等价物就不要造桥；需要桥的地方，把这四件事做扎实 ——
@@ -16,8 +16,8 @@ SwiftBridgeKit/
 │   ├── Sources/…            BridgeView / BridgeCoordinator / BridgeGuard / SizedBridge…
 │   └── Docs/08_接入检查表.md  组件接入八步法
 ├── SwiftChainKit/           点语法链式配置 UIKit 的 DSL（SPM，零依赖，仅 iOS）
-├── SwiftBridgeComponents/   SwiftUI 组件库（SPM，28 个组件）
-├── SwiftBridgeKitDemo/      Demo 工程（.xcodeproj）—— 10 个可运行教学页
+├── SwiftBridgeComponents/   SwiftUI 组件库（SPM，32 个组件）
+├── SwiftBridgeKitDemo/      Demo 工程（.xcodeproj）—— 11 个可运行教学页
 ├── Vendor/SnapKit/          SnapKit 本地 vendored（离线也能完整构建）
 └── scripts/verify.sh        双包验证脚本：自动挑模拟器 → 编译 + 全量单测
 ```
@@ -28,7 +28,7 @@ SwiftBridgeKit/
 |---|---|---|
 | **SwiftBridgeKit** | 桥接契约与运行时 | `State` 单向下行、`Intent` 单向上报、`BridgeGuard` 抑制更新环、`SizedBridge` 异步尺寸回流、`teardown` 生命周期收口 |
 | **SwiftChainKit** | UIKit 视图创建 | 把 `titleLabel.text=…; titleLabel.font=…; addSubview…` 的 boilerplate 收成 `.chain().text(_:).font(_:).added(to:).build()`，保型不断 |
-| **SwiftBridgeComponents** | 现成组件 | ActionSheet / ActivityIndicator / Avatar / Badge / BottomSheet / Button / Carousel / Chip / DatePicker / Dialog / EmptyState / Grid / IndexBar / List / Notice / OTPField / PageControl / PickerWheel / ProgressBar / Rating / SearchField / Segmented / Slider / Stepper / Switch / TextField / TextView / Toast |
+| **SwiftBridgeComponents** | 现成组件 | ActionSheet / ActivityIndicator / Avatar / Badge / BottomSheet / Button / Carousel / Checkbox / Chip / DatePicker / Dialog / EmptyState / Grid / IndexBar / List / Notice / OTPField / PageControl / PickerWheel / ProgressBar / RadioGroup / Rating / SearchField / Segmented / Slider / Sparkline / StepIndicator / Stepper / Switch / TextField / TextView / Toast |
 
 分层而不是一个大库：**桥接层**只做适配、不背业务状态；**链式层**只管配置 DSL、不做布局魔法；**组件层**才谈得上「组件」。—— 三层职责互不渗透，各自可独立使用。
 
@@ -62,6 +62,7 @@ SwiftUI 是唯一真相
 | 06 | 网格 CollectionView | DiffableDataSource 增量动画 |
 | 07–09 | 组件库三页 | SwiftChainKit + SwiftBridgeComponents 的 SwiftUI 用法 |
 | 10 | 三项设施 | 主题可注入（全局 + 每桥覆盖）/ 无障碍全量 / 弹层容器（Dialog / ActionSheet / BottomSheet） |
+| 11 | 选择与指标 | Checkbox / RadioGroup（选中态由业务回写）+ StepIndicator / Sparkline（绘制型展示） |
 
 ## 快速开始
 
@@ -69,7 +70,7 @@ SwiftUI 是唯一真相
 # 1. 打开 Demo 工程，Build 到模拟器
 open SwiftBridgeKitDemo/SwiftBridgeKitDemo.xcodeproj
 
-# 2. 命令行直达某页（环境变量 DEMO=NN，1–10）
+# 2. 命令行直达某页（环境变量 DEMO=NN，1–11）
 xcrun simctl boot "iPhone 15" || true
 xcrun simctl install booted \
   <DerivedData>/Build/Products/Debug-iphonesimulator/SwiftBridgeKitDemo.app
