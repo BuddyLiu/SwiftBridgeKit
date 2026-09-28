@@ -79,6 +79,11 @@ public final class ChipBridgeView: UIView, BridgeView {
     /// 意图上抛回调：点击标签。
     public var onIntent: ((ChipIntent) -> Void)?
 
+    /// 每桥主题覆盖（运行时换肤）。nil = 回落全局 `ComponentTheme.current`。
+    public var theme: (any BridgeTheme)?
+    /// 上次解析生效的主题缓存：变化时强制重绘颜色（themeChanged）。
+    private var cachedTheme: ComponentTheme?
+
     private let iconView = UIImageView()
     private let label = UILabel()
     private let stack = UIStackView()
@@ -90,6 +95,10 @@ public final class ChipBridgeView: UIView, BridgeView {
     override public init(frame: CGRect) {
         super.init(frame: frame)
         self.chain().clipsToBounds(true)
+
+        // 无障碍：整个 chip 是一个按钮语义的读屏元素（label/value 由 apply 更新）
+        isAccessibilityElement = true
+        accessibilityTraits = [.button]
 
         // 图标：16pt 前置，默认隐藏；arranged 子视图统一走栈管理
         iconView.chain()
@@ -152,19 +161,29 @@ public final class ChipBridgeView: UIView, BridgeView {
     /// - Parameters:
     ///   - state: 最新的标签状态。
     public func apply(_ state: ChipState) {
+        // 主题解析：每桥覆盖优先，否则回落全局 current；themeChanged 时强制重绘颜色
+        let theme = resolvedTheme()
+        let themeChanged = (cachedTheme != theme)
+        cachedTheme = theme
         let prev = cached
         cached = state
 
         if prev?.title != state.title {
             label.text = state.title
+            // 单元素读屏：label = 文案
+            accessibilityLabel = state.title
             invalidateIntrinsicContentSize()
         }
         if prev?.icon != state.icon || prev?.showsCheckmark != state.showsCheckmark {
-            syncIcon(state)
+            syncIcon(state, theme: theme)
             invalidateIntrinsicContentSize()
         }
-        if prev?.tone != state.tone || prev?.isSelected != state.isSelected {
-            applySelectionStyle(state)
+        if themeChanged || prev?.tone != state.tone || prev?.isSelected != state.isSelected {
+            applySelectionStyle(state, theme: theme)
+        }
+        if prev?.isSelected != state.isSelected {
+            // 读屏 value：选中态补 "已选"，未选中回落默认
+            accessibilityValue = state.isSelected ? "已选" : nil
         }
         if prev?.isEnabled != state.isEnabled {
             isUserInteractionEnabled = state.isEnabled
@@ -179,8 +198,8 @@ public final class ChipBridgeView: UIView, BridgeView {
 
     // MARK: - 差异映射
 
-    private func applySelectionStyle(_ state: ChipState) {
-        let color = ComponentPalette.color(for: state.tone)
+    private func applySelectionStyle(_ state: ChipState, theme: ComponentTheme) {
+        let color = theme.color(for: state.tone)
         if state.isSelected {
             backgroundColor = color
             label.textColor = .white
@@ -194,18 +213,18 @@ public final class ChipBridgeView: UIView, BridgeView {
             layer.borderColor = UIColor.separator.cgColor
         }
         // 选中态切换会影响图标配色/是否换成 checkmark，跟随刷新
-        syncIcon(state)
+        syncIcon(state, theme: theme)
     }
 
     /// 图标优先级：选中且 showsCheckmark → checkmark（反白）；有 icon → tone 色（选中反白）；否则隐藏。
-    private func syncIcon(_ state: ChipState) {
+    private func syncIcon(_ state: ChipState, theme: ComponentTheme) {
         if state.showsCheckmark && state.isSelected {
             iconView.image = UIImage(systemName: "checkmark")
             iconView.tintColor = .white
             iconView.isHidden = false
         } else if let name = state.icon {
             iconView.image = UIImage(systemName: name)
-            iconView.tintColor = state.isSelected ? .white : ComponentPalette.color(for: state.tone)
+            iconView.tintColor = state.isSelected ? .white : theme.color(for: state.tone)
             iconView.isHidden = false
         } else {
             iconView.image = nil

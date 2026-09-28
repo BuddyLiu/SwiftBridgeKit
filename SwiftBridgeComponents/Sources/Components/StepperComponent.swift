@@ -88,11 +88,16 @@ public final class StepperBridgeView: UIView, BridgeView {
     /// 意图上抛回调：数值变化。
     public var onIntent: ((StepperIntent) -> Void)?
 
+    /// 每桥主题覆盖（运行时换肤）；`resolvedTheme()` = 本属性 ?? 全局 current。
+    public var theme: (any BridgeTheme)?
+
     /// internal（非 private）：留给 @testable 冒烟测试校验 apply 写值用。
     let stepper = UIStepper()
     /// 上报去重水印：值没变就不上报，防闭环。
     private var lastReported: Double?
     private var cached: StepperState?
+    /// 最近一次生效的主题缓存：主题变化时强制颜色字段重绘。
+    private var cachedTheme: ComponentTheme?
 
     /// 构造组件：搭好 UIStepper 与居中约束。
     /// - Parameters:
@@ -101,6 +106,7 @@ public final class StepperBridgeView: UIView, BridgeView {
         super.init(frame: frame)
 
         stepper.chain()
+            .accessibilityLabel("步进器")
             .target(self, action: #selector(valueChanged), for: .valueChanged)
             .added(to: self)
 
@@ -125,6 +131,10 @@ public final class StepperBridgeView: UIView, BridgeView {
     /// - Parameters:
     ///   - state: 最新的步进器状态。
     public func apply(_ state: StepperState) {
+        // 主题解析：每桥 override → 全局 current；主题变化强制颜色字段重绘
+        let theme = resolvedTheme()
+        let themeChanged = (cachedTheme != theme)
+        cachedTheme = theme
         let prev = cached
         cached = state
 
@@ -138,8 +148,8 @@ public final class StepperBridgeView: UIView, BridgeView {
         if stepper.stepValue != state.step { stepper.stepValue = state.step }
         if stepper.wraps != state.wraps { stepper.wraps = state.wraps }
         if stepper.autorepeat != state.autorepeat { stepper.autorepeat = state.autorepeat }
-        if prev?.tone != state.tone {
-            stepper.tintColor = ComponentPalette.color(for: state.tone)
+        if themeChanged || prev?.tone != state.tone {
+            stepper.tintColor = resolvedTheme().color(for: state.tone)
         }
         if stepper.isEnabled != state.isEnabled { stepper.isEnabled = state.isEnabled }
     }

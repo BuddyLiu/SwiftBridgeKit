@@ -11,6 +11,8 @@
 import XCTest
 @testable import SwiftBridgeComponents
 
+/// 样式映射读取 @MainActor 的 ComponentPalette（读全局主题），故整类标 @MainActor。
+@MainActor
 final class ComponentsTests: XCTestCase {
 
     // MARK: - 契约层默认值
@@ -363,21 +365,33 @@ final class ComponentsTests: XCTestCase {
 
     // MARK: - UIKit 样式映射 spot-check
 
+    /// 映射现为动态色（随亮暗解析），比对需要按 trait 解析后取色。
+    private func resolved(_ color: UIColor, _ style: UIUserInterfaceStyle) -> UIColor {
+        color.resolvedColor(with: UITraitCollection(userInterfaceStyle: style))
+    }
+
     func testToneColorMapping() {
-        XCTAssertEqual(ComponentPalette.color(for: .primary), .systemBlue)
-        XCTAssertEqual(ComponentPalette.color(for: .success), .systemGreen)
-        XCTAssertEqual(ComponentPalette.color(for: .danger), .systemRed)
+        let primary = resolved(ComponentPalette.color(for: .primary), .light)
+        XCTAssertEqual(primary, UIColor.systemBlue.resolvedColor(with: UITraitCollection(userInterfaceStyle: .light)))
+        let success = resolved(ComponentPalette.color(for: .success), .light)
+        XCTAssertEqual(success, UIColor.systemGreen.resolvedColor(with: UITraitCollection(userInterfaceStyle: .light)))
+        let danger = resolved(ComponentPalette.color(for: .danger), .light)
+        XCTAssertEqual(danger, UIColor.systemRed.resolvedColor(with: UITraitCollection(userInterfaceStyle: .light)))
     }
 
     func testStarColorMapping() {
-        XCTAssertEqual(ComponentPalette.starColor(for: .gold), .systemYellow)
-        XCTAssertEqual(ComponentPalette.starColor(for: .system), .tintColor)
+        let gold = resolved(ComponentPalette.starColor(for: .gold), .light)
+        XCTAssertEqual(gold, UIColor.systemYellow.resolvedColor(with: UITraitCollection(userInterfaceStyle: .light)))
+        let system = resolved(ComponentPalette.starColor(for: .system), .light)
+        XCTAssertEqual(system, UIColor.tintColor.resolvedColor(with: UITraitCollection(userInterfaceStyle: .light)))
     }
 
     func testButtonColorMapping() {
         let primary = ComponentPalette.buttonColors(for: .primary)
-        XCTAssertEqual(primary.background, .systemBlue)
-        XCTAssertEqual(primary.foreground, .white)
+        let bg = resolved(primary.background, .light)
+        XCTAssertEqual(bg, UIColor.systemBlue.resolvedColor(with: UITraitCollection(userInterfaceStyle: .light)))
+        let fg = resolved(primary.foreground, .light)
+        XCTAssertEqual(fg, UIColor.white.resolvedColor(with: UITraitCollection(userInterfaceStyle: .light)))
     }
 
     func testTextFieldBorderCases() {

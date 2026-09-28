@@ -95,6 +95,11 @@ public final class ToastBridgeView: UIView, BridgeView {
     /// 意图回调：`tapped` / `autoDismissed` 在此上报给宿主。
     public var onIntent: ((ToastIntent) -> Void)?
 
+    /// 每桥主题覆盖（运行时换肤）。nil = 回落全局 `ComponentTheme.current`。
+    public var theme: (any BridgeTheme)?
+    /// 上次解析生效的主题缓存：变化时强制重绘颜色（themeChanged）。
+    private var cachedTheme: ComponentTheme?
+
     private let card = UIView()
     private let stack = UIStackView()
     private let iconView = UIImageView()
@@ -107,6 +112,11 @@ public final class ToastBridgeView: UIView, BridgeView {
     /// 以 frame 创建桥视图，并完成卡片、内容栈、约束与点按手势的构建。
     override public init(frame: CGRect) {
         super.init(frame: frame)
+
+        // 无障碍：容器是 staticText 语义的单读屏元素（label 由 apply 随文案更新；
+        // 收起时通过 accessibilityElementsHidden 摘出读屏树，避免读出看不见的 Toast）。
+        isAccessibilityElement = true
+        accessibilityTraits = [.staticText]
 
         // 卡片：tone 浅底 + 圆角，内容由 stack 内边距撑起
         card.chain()
@@ -176,11 +186,17 @@ public final class ToastBridgeView: UIView, BridgeView {
     ///
     /// 已展示时改档或取消自动消失会直接重置计时器（映射见文件头「差异映射字段清单」）。
     public func apply(_ state: ToastState) {
+        // 主题解析：每桥覆盖优先，否则回落全局 current；themeChanged 时强制重绘颜色
+        let theme = resolvedTheme()
+        let themeChanged = (cachedTheme != theme)
+        cachedTheme = theme
         let prev = cached
         cached = state
 
         if prev?.message != state.message {
             label.text = state.message
+            // 单元素读屏：label = 文案
+            accessibilityLabel = state.message
         }
         if prev?.icon != state.icon {
             if let icon = state.icon {
@@ -191,8 +207,8 @@ public final class ToastBridgeView: UIView, BridgeView {
                 iconView.isHidden = true
             }
         }
-        if prev?.tone != state.tone {
-            applyTone(state.tone)
+        if themeChanged || prev?.tone != state.tone {
+            applyTone(state.tone, theme: theme)
         }
         if prev?.dismissOnTap != state.dismissOnTap {
             updateTap(to: state.dismissOnTap)
@@ -220,15 +236,19 @@ public final class ToastBridgeView: UIView, BridgeView {
 
     // MARK: - 差异映射
 
-    private func applyTone(_ tone: ComponentTone) {
-        let color = ComponentPalette.color(for: tone)
-        card.backgroundColor = ComponentPalette.softBackground(for: tone)
+    private func applyTone(_ tone: ComponentTone, theme: ComponentTheme) {
+        let color = theme.color(for: tone)
+        card.backgroundColor = theme.softBackground(for: tone)
         label.textColor = color
         iconView.tintColor = color
     }
 
     private func setPresented(_ presented: Bool) {
+        // 无障碍：收起时把 Toast 元素摘出读屏树，避免读出看不见的浮层；
+        // 只在此「隐藏→显示」转变时朗读一次文案。
+        accessibilityElementsHidden = !presented
         if presented {
+            UIAccessibility.post(notification: .announcement, argument: cached?.message ?? "")
             UIView.animate(withDuration: 0.25, delay: 0, options: [.curveEaseOut]) {
                 self.card.alpha = 1
                 self.card.transform = .identity

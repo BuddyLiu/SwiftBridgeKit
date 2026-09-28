@@ -87,9 +87,14 @@ public final class ButtonBridgeView: UIView, BridgeView {
     /// 意图回调：把按钮点击事件上抛给宿主。
     public var onIntent: ((ButtonIntent) -> Void)?
 
+    /// 每桥主题覆盖（运行时换肤）；`resolvedTheme()` = 本属性 ?? 全局 current。
+    public var theme: (any BridgeTheme)?
+
     private let button = UIButton(type: .custom)
     private let spinner = UIActivityIndicatorView(style: .medium)
     private var cached: ButtonState?
+    /// 最近一次生效的主题缓存：主题变化时强制颜色字段重绘。
+    private var cachedTheme: ComponentTheme?
 
     /// 初始化桥视图：装配 UIButton 与加载菊花、建立约束，并挂上点击事件。
     override public init(frame: CGRect) {
@@ -127,10 +132,14 @@ public final class ButtonBridgeView: UIView, BridgeView {
 
     /// 把 State 快照差异映射到视图上。
     public func apply(_ state: ButtonState) {
+        // 主题解析：每桥 override → 全局 current；主题变化强制颜色字段重绘
+        let theme = resolvedTheme()
+        let themeChanged = (cachedTheme != theme)
+        cachedTheme = theme
         let prev = cached
         cached = state
 
-        if prev?.style != state.style || prev?.size != state.size {
+        if themeChanged || prev?.style != state.style || prev?.size != state.size {
             applyStyleAndSize()
         }
         if prev?.title != state.title || prev?.icon != state.icon || prev?.loadingTitle != state.loadingTitle {
@@ -158,7 +167,8 @@ public final class ButtonBridgeView: UIView, BridgeView {
 
     private func applyStyleAndSize() {
         guard let state = cached else { return }
-        let colors = ComponentPalette.buttonColors(for: state.style)
+        let theme = resolvedTheme()
+        let colors = theme.buttonColors(for: state.style)
 
         button.setTitleColor(colors.foreground, for: .normal)
         button.backgroundColor = colors.background
@@ -169,7 +179,7 @@ public final class ButtonBridgeView: UIView, BridgeView {
         switch state.style {
         case .outline:
             button.layer.borderWidth = 1.5
-            button.layer.borderColor = ComponentPalette.buttonOutlineColor().cgColor
+            button.layer.borderColor = theme.buttonOutlineColor().cgColor
         default:
             button.layer.borderWidth = 0
             button.layer.borderColor = nil
@@ -180,7 +190,7 @@ public final class ButtonBridgeView: UIView, BridgeView {
 
     private func applyEnabled(_ enabled: Bool) {
         button.isEnabled = enabled
-        button.alpha = enabled ? 1 : ComponentPalette.buttonDisabledAlpha()
+        button.alpha = enabled ? 1 : resolvedTheme().buttonDisabledAlpha()
     }
 
     /// loading 状态机：菊花覆盖 + 隐藏图标（按需保留 loadingTitle）+ 强制禁用；结束按缓存回填。
@@ -192,7 +202,7 @@ public final class ButtonBridgeView: UIView, BridgeView {
             button.isUserInteractionEnabled = false
             button.setTitle(state.loadingTitle, for: .normal)
             button.setImage(nil, for: .normal)
-            spinner.color = ComponentPalette.buttonColors(for: state.style).foreground
+            spinner.color = resolvedTheme().buttonColors(for: state.style).foreground
             spinner.startAnimating()
         } else {
             spinner.stopAnimating()

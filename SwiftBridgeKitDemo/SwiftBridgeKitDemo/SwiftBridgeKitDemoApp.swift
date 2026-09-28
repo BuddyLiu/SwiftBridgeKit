@@ -38,6 +38,7 @@ struct SwiftBridgeKitDemoApp: App {
         case 7: Demo07_ComponentsGalleryPage()
         case 8: Demo08_ComplexViewsGalleryPage()
         case 9: Demo09_ExtendedGalleryPage()
+        case 10: Demo10_FacilitiesGalleryPage()
         default: DemoList()
         }
     }
@@ -68,7 +69,7 @@ struct DemoList: View {
                 }
             }
 
-            Section("组件库（07–09）") {
+            Section("组件库（07–10）") {
                 NavigationLink("07 · 组件库（SwiftBridgeComponents）") {
                     Demo07_ComponentsGalleryPage()
                 }
@@ -77,6 +78,9 @@ struct DemoList: View {
                 }
                 NavigationLink("09 · 组件扩展（Progress / Search / Toast）") {
                     Demo09_ExtendedGalleryPage()
+                }
+                NavigationLink("10 · 三项设施（主题 / 无障碍 / 弹层）") {
+                    Demo10_FacilitiesGalleryPage()
                 }
             }
         }

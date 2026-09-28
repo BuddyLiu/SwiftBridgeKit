@@ -40,6 +40,10 @@ public final class BridgeCoordinator<View: BridgeView> {
     /// 上一次成功应用的状态，用于早退。
     private var lastApplied: View.State?
 
+    /// 上一次成功应用的主题，与 lastApplied 组成双子元组早退：
+    /// state 与 theme 都没变才跳过；仅 theme 变也要重放 apply（组件用 themeChanged 强制重绘）。
+    private var lastAppliedTheme: (any BridgeTheme)?
+
     /// 登记在案、必须注销的成对资源（设施四）。
     ///
     /// nonisolated(unsafe)：register 只在主线程追加，deinit 时不会再有并发写入，
@@ -86,17 +90,33 @@ public final class BridgeCoordinator<View: BridgeView> {
     ///
     /// 内部先做值比较早退（与上次相同则直接返回、不触发视图更新），
     /// 再进入保护窗口写入视图，因此调用方无需担心重复刷写。
+    /// theme 参与双子元组早退：仅主题变化时也会重放 apply，
+    /// 让组件用自己的 themeChanged 逐字段强制重绘颜色。
     ///
     /// - Parameters:
     ///   - state: 从 SwiftUI 侧流入的最新数据快照。
-    public func apply(_ state: View.State) {
-        // ① 值比较早退：成本极低，收益极大
-        guard lastApplied != state else { return }
+    ///   - theme: 每桥主题覆盖（运行时换肤）；默认 nil 表示不改变主题。
+    public func apply(_ state: View.State, theme: (any BridgeTheme)? = nil) {
+        // ① 值比较早退：state 与 theme 都没变才跳过；cost 极低，收益极大
+        if lastApplied == state, themesEqual(lastAppliedTheme, theme) { return }
         lastApplied = state
+        lastAppliedTheme = theme
 
-        // ② 抑制窗口内写入视图
+        // ② 抑制窗口内写入视图（theme 注入 + 差异映射都收敛到这里）
         guardWindow.performUpdate { [weak self] in
+            self?.view?.theme = theme
             self?.view?.apply(state)
+        }
+    }
+
+    /// 主题相等性：nil/nil 相等；非空经 AnyHashable 类型擦除比较
+    /// （Swift 6 下 `any BridgeTheme` 不能直接 `==`，故统一走擦除）；
+    /// 其余（跨类型 / 一 nil 一值）不等。
+    private func themesEqual(_ a: (any BridgeTheme)?, _ b: (any BridgeTheme)?) -> Bool {
+        switch (a, b) {
+        case (nil, nil): return true
+        case (let x?, let y?): return AnyHashable(x) == AnyHashable(y)
+        default: return false
         }
     }
 

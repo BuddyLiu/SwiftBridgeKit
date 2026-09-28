@@ -44,6 +44,14 @@ public struct BridgeRepresentable<Bridge: BridgeView>: UIViewRepresentable {
     /// 框架内部把 RatioResolver 的「布局回流」接到 SwiftUI 侧（见 makeUIView）。
     private let requestLayout: () -> Void
 
+    /// 每桥主题覆盖（运行时换肤）。Coordinator 下行 state 时一并注入。
+    private let theme: (any BridgeTheme)?
+
+    /// 业务注入层无障碍：非 nil 才写，覆盖组件库默认；nil 表示保留默认。
+    private let accessibilityLabel: String?
+    private let accessibilityHint: String?
+    private let accessibilityValue: String?
+
     /// 创建桥接器。
     ///
     /// - Parameters:
@@ -52,18 +60,28 @@ public struct BridgeRepresentable<Bridge: BridgeView>: UIViewRepresentable {
     ///   - onIntent: 意图上报的最终去向。
     ///   - ratioProvider: 可选的内容宽高比提供者；返回 nil 表示比例尚未就绪，此时不参与布局。
     ///   - requestLayout: 请求 SwiftUI 重新布局的回调，默认空实现。
+    ///   - theme: 每桥主题覆盖（运行时换肤）；默认 nil = 组件回落全局主题。
+    ///   - accessibilityLabel/Hint/Value: 业务注入层无障碍；非 nil 才写，覆盖组件库默认。
     public init(
         state: Bridge.State,
         makeView: @escaping () -> Bridge,
         onIntent: @escaping (Bridge.Intent) -> Void,
         ratioProvider: ((Bridge) -> CGFloat?)? = nil,
-        requestLayout: @escaping () -> Void = {}
+        requestLayout: @escaping () -> Void = {},
+        theme: (any BridgeTheme)? = nil,
+        accessibilityLabel: String? = nil,
+        accessibilityHint: String? = nil,
+        accessibilityValue: String? = nil
     ) {
         self.state = state
         self.makeView = makeView
         self.onIntent = onIntent
         self.ratioProvider = ratioProvider
         self.requestLayout = requestLayout
+        self.theme = theme
+        self.accessibilityLabel = accessibilityLabel
+        self.accessibilityHint = accessibilityHint
+        self.accessibilityValue = accessibilityValue
     }
 
     /// 创建并返回本次装配使用的协调器。
@@ -97,8 +115,18 @@ public struct BridgeRepresentable<Bridge: BridgeView>: UIViewRepresentable {
     ///   - uiView: 当前装配的桥视图。
     ///   - context: SwiftUI 提供的装配上下文。
     public func updateUIView(_ uiView: Bridge, context: Context) {
-        // 早退 / 抑制 / 差异映射都由 Coordinator 内部完成
-        context.coordinator.apply(state)
+        // 早退 / 抑制 / 差异映射都由 Coordinator 内部完成；theme 一并下行，
+        // 仅主题变化时 Coordinator 也会重放 apply（组件用 themeChanged 强制重绘）。
+        context.coordinator.apply(state, theme: theme)
+        // 业务注入层无障碍：apply 之后写入，非 nil 才写 → 业务覆盖库默认。
+        applyAccessibility(to: uiView)
+    }
+
+    /// 业务注入层无障碍：非 nil 才写；nil 表示「保留组件库默认」。
+    private func applyAccessibility(to uiView: Bridge) {
+        if let accessibilityLabel { uiView.accessibilityLabel = accessibilityLabel }
+        if let accessibilityHint { uiView.accessibilityHint = accessibilityHint }
+        if let accessibilityValue { uiView.accessibilityValue = accessibilityValue }
     }
 
     /// 桥视图被移除时调用，尽力清理。
@@ -154,6 +182,14 @@ public struct BridgeHost<Bridge: BridgeView>: View {
     // 可选的内容宽高比提供者。
     private let ratioProvider: ((Bridge) -> CGFloat?)?
 
+    /// 每桥主题覆盖（运行时换肤）。
+    private let theme: (any BridgeTheme)?
+
+    /// 业务注入层无障碍：非 nil 才写，覆盖组件库默认。
+    private let accessibilityLabel: String?
+    private let accessibilityHint: String?
+    private let accessibilityValue: String?
+
     /// 布局回流令牌：比例异步就绪时 +1，触发一次 SwiftUI 重布局，
     /// 让 sizeThatFits 用新比例计算高度（配 makeUIView 里的兜线）。
     @State private var layoutToken = 0
@@ -165,16 +201,26 @@ public struct BridgeHost<Bridge: BridgeView>: View {
     ///   - makeView: 创建桥视图的闭包。
     ///   - onIntent: 意图上报的最终去向。
     ///   - ratioProvider: 可选的内容宽高比提供者；返回 nil 表示比例尚未就绪。
+    ///   - theme: 每桥主题覆盖（运行时换肤）；默认 nil = 组件回落全局主题。
+    ///   - accessibilityLabel/Hint/Value: 业务注入层无障碍；非 nil 才写，覆盖组件库默认。
     public init(
         state: Bridge.State,
         makeView: @escaping () -> Bridge,
         onIntent: @escaping (Bridge.Intent) -> Void,
-        ratioProvider: ((Bridge) -> CGFloat?)? = nil
+        ratioProvider: ((Bridge) -> CGFloat?)? = nil,
+        theme: (any BridgeTheme)? = nil,
+        accessibilityLabel: String? = nil,
+        accessibilityHint: String? = nil,
+        accessibilityValue: String? = nil
     ) {
         self.state = state
         self.makeView = makeView
         self.onIntent = onIntent
         self.ratioProvider = ratioProvider
+        self.theme = theme
+        self.accessibilityLabel = accessibilityLabel
+        self.accessibilityHint = accessibilityHint
+        self.accessibilityValue = accessibilityValue
     }
 
     /// 桥接视图的内容（转发给 BridgeRepresentable）。
@@ -184,7 +230,11 @@ public struct BridgeHost<Bridge: BridgeView>: View {
             makeView: makeView,
             onIntent: onIntent,
             ratioProvider: ratioProvider,
-            requestLayout: { layoutToken += 1 }
+            requestLayout: { layoutToken += 1 },
+            theme: theme,
+            accessibilityLabel: accessibilityLabel,
+            accessibilityHint: accessibilityHint,
+            accessibilityValue: accessibilityValue
         )
     }
 }

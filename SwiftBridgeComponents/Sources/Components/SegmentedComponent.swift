@@ -74,15 +74,21 @@ public final class SegmentedBridgeView: UIView, BridgeView {
     /// 上行事件回调：选中段变化时把新索引回传调用方。
     public var onIntent: ((SegmentedIntent) -> Void)?
 
+    /// 每桥主题覆盖（运行时换肤）；`resolvedTheme()` = 本属性 ?? 全局 current。
+    public var theme: (any BridgeTheme)?
+
     private let seg = UISegmentedControl()
     private var lastReported: Int?
     private var cached: SegmentedState?
+    /// 最近一次生效的主题缓存：主题变化时强制颜色字段重绘。
+    private var cachedTheme: ComponentTheme?
 
     /// 兼容 frame 初始化：事件挂接走链，布局由内部 SnapKit 控制。
     override public init(frame: CGRect) {
         super.init(frame: frame)
         // 事件挂接走链；尺寸/位置由下方 SnapKit 定
         seg.chain()
+            .accessibilityLabel("分段选择")
             .target(self, action: #selector(valueChanged), for: .valueChanged)
             .added(to: self)
 
@@ -106,6 +112,10 @@ public final class SegmentedBridgeView: UIView, BridgeView {
 
     /// 应用新状态：段列表变化时重建全部分段并连带重设选中，其余字段按缓存逐项差异映射。
     public func apply(_ state: SegmentedState) {
+        // 主题解析：每桥 override → 全局 current；主题变化强制颜色字段重绘
+        let theme = resolvedTheme()
+        let themeChanged = (cachedTheme != theme)
+        cachedTheme = theme
         let prev = cached
         cached = state
 
@@ -119,7 +129,7 @@ public final class SegmentedBridgeView: UIView, BridgeView {
         } else if prev?.selectedIndex != state.selectedIndex {
             syncSelection(state)
         }
-        if prev?.tone != state.tone {
+        if themeChanged || prev?.tone != state.tone {
             applyTone(state.tone)
         }
         if prev?.isEnabled != state.isEnabled {
@@ -148,7 +158,7 @@ public final class SegmentedBridgeView: UIView, BridgeView {
     }
 
     private func applyTone(_ tone: ComponentTone) {
-        let color = ComponentPalette.color(for: tone)
+        let color = resolvedTheme().color(for: tone)
         seg.selectedSegmentTintColor = color
         // 选中段统一白字（深色底保证对比度）；普通段默认色
         seg.setTitleTextAttributes([.foregroundColor: UIColor.white], for: .selected)

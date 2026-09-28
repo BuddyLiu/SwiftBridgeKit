@@ -96,6 +96,10 @@ public final class GridBridgeView: UIView, BridgeView, UICollectionViewDelegate,
     private var dataSource: UICollectionViewDiffableDataSource<Int, GridCell>!
     private var cells: [GridCell] = []
     private var columns: Int = 3
+    /// 每桥主题覆盖（运行时换肤）；`resolvedTheme()` = 本属性 ?? 全局 current。
+    public var theme: (any BridgeTheme)?
+    /// 最近一次生效的主题缓存：主题变化时强制把可见 cell 逐格重画（快照早退吞不掉颜色）。
+    private var cachedTheme: ComponentTheme?
 
     /// 构造组件：搭好 flow layout、collectionView 与 diffable data source，并注册单元格。
     /// - Parameters:
@@ -122,12 +126,14 @@ public final class GridBridgeView: UIView, BridgeView, UICollectionViewDelegate,
         // diffable data source：闭包里只做「配置单元格」，不做数据逻辑
         dataSource = UICollectionViewDiffableDataSource<Int, GridCell>(
             collectionView: collectionView
-        ) { collectionView, indexPath, cell in
+        ) { [weak self] collectionView, indexPath, cell in
+            guard let self else { return nil }
             let item = collectionView.dequeueReusableCell(
                 withReuseIdentifier: GridItemCell.reuseID,
                 for: indexPath
             ) as! GridItemCell
-            item.configure(with: cell)
+            // cell 复用期活取当前生效主题（弱捕获 self：复用池与视图不该互相保活）
+            item.configure(with: cell, theme: self.resolvedTheme())
             return item
         }
     }
@@ -148,6 +154,11 @@ public final class GridBridgeView: UIView, BridgeView, UICollectionViewDelegate,
     /// - Parameters:
     ///   - state: 最新的宫格状态。
     public func apply(_ state: GridState) {
+        // 主题解析：每桥 override → 全局 current；变化即 themeChanged（颜色字段强制重绘）
+        let theme = resolvedTheme()
+        let themeChanged = (cachedTheme != theme)
+        cachedTheme = theme
+
         if columns != state.columns {
             columns = state.columns
             // 列数变了必须重排：flow layout 的 item 尺寸只在布局 pass 重算，
@@ -156,13 +167,33 @@ public final class GridBridgeView: UIView, BridgeView, UICollectionViewDelegate,
         }
 
         // 内容没变就不重算 snapshot（配合 coordinator 的 state 早退，双层防线）
-        guard cells != state.cells else { return }
-        cells = state.cells
+        if cells != state.cells {
+            cells = state.cells
 
-        var snapshot = NSDiffableDataSourceSnapshot<Int, GridCell>()
-        snapshot.appendSections([0])
-        snapshot.appendItems(state.cells)
-        dataSource.apply(snapshot, animatingDifferences: true)
+            var snapshot = NSDiffableDataSourceSnapshot<Int, GridCell>()
+            snapshot.appendSections([0])
+            snapshot.appendItems(state.cells)
+            dataSource.apply(snapshot, animatingDifferences: true)
+        }
+
+        // 主题变化但数据没变：diffable 对相同快照不重渲，必须逐格重 configure。
+        // cell 在 apply 之外（provider）复用重建，configure 复用期活取主题，
+        // 这里把可见 cell 全部重放一遍即可换肤；滚动复用的新 cell 由 provider 覆盖。
+        if themeChanged {
+            redrawVisibleCells()
+        }
+    }
+
+    /// 主题变化时强制重画：对可见 cell 逐格重放当前格（复用期活取主题）。
+    private func redrawVisibleCells() {
+        guard dataSource != nil, !cells.isEmpty else { return }
+        let theme = resolvedTheme()
+        for cell in collectionView.visibleCells {
+            guard let itemCell = cell as? GridItemCell,
+                  let indexPath = collectionView.indexPath(for: itemCell),
+                  indexPath.item < cells.count else { continue }
+            itemCell.configure(with: cells[indexPath.item], theme: theme)
+        }
     }
 
     /// 拆桥：断 delegate、置空 dataSource 与意图回调。
@@ -201,7 +232,7 @@ public final class GridBridgeView: UIView, BridgeView, UICollectionViewDelegate,
 // MARK: - 单元格
 
 @MainActor
-private final class GridItemCell: UICollectionViewCell {
+final class GridItemCell: UICollectionViewCell {
 
     static let reuseID = "GridItemCell"
 
@@ -259,12 +290,15 @@ private final class GridItemCell: UICollectionViewCell {
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
-    func configure(with cell: GridCell) {
-        backgroundColor = ComponentPalette.softBackground(for: cell.tone)
+    /// configure 写入：颜色取自传入主题（桥解析后的当前生效主题），nil 回落全局 current。
+    /// 复用期活取：滚动复用 / themeChanged 逐格重 configure 都会走到这里，换肤即生效。
+    func configure(with cell: GridCell, theme: ComponentTheme? = nil) {
+        let resolved = theme ?? ComponentTheme.current
+        backgroundColor = resolved.softBackground(for: cell.tone)
         titleLabel.text = cell.title
-        titleLabel.textColor = ComponentPalette.color(for: cell.tone)
+        titleLabel.textColor = resolved.color(for: cell.tone)
         iconView.image = cell.icon.flatMap { UIImage(systemName: $0) }
-        iconView.tintColor = ComponentPalette.color(for: cell.tone)
+        iconView.tintColor = resolved.color(for: cell.tone)
         if let badge = cell.badge {
             badgeLabel.text = badge
             badgeLabel.isHidden = false
@@ -272,6 +306,12 @@ private final class GridItemCell: UICollectionViewCell {
             badgeLabel.text = nil
             badgeLabel.isHidden = true
         }
+
+        // 无障碍：整格聚合成一个可访问元素 —— title 作 label、badge 作 value。
+        isAccessibilityElement = true
+        accessibilityTraits = [.button]
+        accessibilityLabel = cell.title
+        accessibilityValue = cell.badge
     }
 
     override func prepareForReuse() {
@@ -281,5 +321,9 @@ private final class GridItemCell: UICollectionViewCell {
         titleLabel.text = nil
         badgeLabel.text = nil
         badgeLabel.isHidden = true
+        // 无障碍归零：防脏复用把上一格的 label/value 串到下一格
+        accessibilityLabel = nil
+        accessibilityValue = nil
+        accessibilityTraits = []
     }
 }

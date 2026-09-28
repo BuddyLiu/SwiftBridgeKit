@@ -89,11 +89,17 @@ public final class SliderBridgeView: UIView, BridgeView {
     /// 上行事件回调：取值变化时把（取整后的）新值回传调用方。
     public var onIntent: ((SliderIntent) -> Void)?
 
-    private let sl = UISlider()
+    /// 每桥主题覆盖（运行时换肤）；`resolvedTheme()` = 本属性 ?? 全局 current。
+    public var theme: (any BridgeTheme)?
+
+    /// internal（非 private）：留给 @testable 冒烟测试校验取值与无障碍 label 用。
+    let sl = UISlider()
     private var step: Double = 0
     private var reportsContinuously: Bool = true
     private var lastReported: Double?
     private var cached: SliderState?
+    /// 最近一次生效的主题缓存：主题变化时强制颜色字段重绘。
+    private var cachedTheme: ComponentTheme?
 
     /// 兼容 frame 初始化：同时挂接 valueChanged（实时上报）与 editingEnded（松手补报）两个事件目标。
     override public init(frame: CGRect) {
@@ -103,6 +109,7 @@ public final class SliderBridgeView: UIView, BridgeView {
             .target(self, action: #selector(valueChanged), for: .valueChanged)
             .also { $0.addTarget(self, action: #selector(editingEnded), for: [.touchUpInside, .touchUpOutside]) }
             .added(to: self)
+        sl.accessibilityLabel = "滑块"
 
         sl.snp.makeConstraints { make in
             make.edges.equalToSuperview()
@@ -123,6 +130,10 @@ public final class SliderBridgeView: UIView, BridgeView {
     /// 应用新状态：上下界、step、取值、色调、可用态与连续上报按缓存逐项差异映射。
     /// - Note: 拖动中（sl.isTracking）不会回写 value，防止每次 apply 打断用户手势（见文件头正解 1）。
     public func apply(_ state: SliderState) {
+        // 主题解析：每桥 override → 全局 current；主题变化强制颜色字段重绘
+        let theme = resolvedTheme()
+        let themeChanged = (cachedTheme != theme)
+        cachedTheme = theme
         let prev = cached
         cached = state
 
@@ -138,8 +149,8 @@ public final class SliderBridgeView: UIView, BridgeView {
             sl.setValue(Float(state.value), animated: false)
             lastReported = snap(state.value)
         }
-        if prev?.tone != state.tone {
-            let color = ComponentPalette.color(for: state.tone)
+        if themeChanged || prev?.tone != state.tone {
+            let color = resolvedTheme().color(for: state.tone)
             sl.minimumTrackTintColor = color
             sl.thumbTintColor = color
         }

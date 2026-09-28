@@ -37,6 +37,11 @@ public protocol BridgeView: UIView {
     /// 纯展示型组件无需实现：协议扩展提供空实现。
     var onRequestLayout: (() -> Void)? { get set }
 
+    /// 每桥主题覆盖（phase 1 仅颜色）。由 Coordinator 在 apply 时注入；
+    /// 组件在 apply 内用 `resolvedTheme()`（= 本属性 ?? 全局 current）解析颜色。
+    /// 纯展示、不关心换肤的组件可完全不碰它（协议扩展提供空实现）。
+    var theme: (any BridgeTheme)? { get set }
+
     /// 把一份 state 快照映射到视图上。
     ///
     /// ⚠️ 只做「差异映射」，不要无条件全量重建。
@@ -56,6 +61,12 @@ public extension BridgeView {
 
     /// 默认空实现：不注入尺寸回流通道。
     var onRequestLayout: (() -> Void)? {
+        get { nil }
+        set {}
+    }
+
+    /// 默认空实现：不注入主题覆盖（组件回落全局主题）。
+    var theme: (any BridgeTheme)? {
         get { nil }
         set {}
     }

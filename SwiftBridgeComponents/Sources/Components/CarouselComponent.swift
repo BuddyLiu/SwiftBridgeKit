@@ -164,11 +164,17 @@ public final class CarouselBridgeView: UIView, BridgeView {
     private let scrollView = UIScrollView()
     private let pageControl = UIPageControl()
 
+    /// 每桥主题覆盖（运行时换肤）；`resolvedTheme()` = 本属性 ?? 全局 current。
+    public var theme: (any BridgeTheme)?
+    /// 最近一次生效的主题缓存：主题变化时强制重建页面（页面在 apply 之外 makePage 生成）。
+    private var cachedTheme: ComponentTheme?
+
     /// 原始 slides（真实页），长度 N。
     private var slides: [CarouselSlide] = []
     /// 渲染页 = slides 的三份拷贝（无限模式），或 slides 本体（有限模式）。长度 renderCount。
     private var renderedSlides: [CarouselSlide] = []
-    private var pageViews: [UIView] = []
+    /// internal（非 private）：留给 @testable 测试校验页面数用。
+    var pageViews: [UIView] = []
     private var isInfinite = false
 
     /// 当前所在的「可视页」（渲染空间 0..<renderCount）。逻辑状态的中枢。
@@ -256,7 +262,14 @@ public final class CarouselBridgeView: UIView, BridgeView {
     /// - Parameters:
     ///   - state: 最新的轮播状态。
     public func apply(_ state: CarouselState) {
-        if state.slides != slides || state.isInfinite != isInfinite {
+        // 主题解析：每桥 override → 全局 current；变化即 themeChanged（页面颜色强制重绘）
+        let theme = resolvedTheme()
+        let themeChanged = (cachedTheme != theme)
+        cachedTheme = theme
+
+        // 页面在 apply 之外生成（rebuildPages → makePage），主题变了不重建就不会重画颜色；
+        // 把 themeChanged 并入重建条件，换肤必走 makePage 重新 resolvedTheme()。
+        if state.slides != slides || state.isInfinite != isInfinite || themeChanged {
             isInfinite = state.isInfinite
             rebuildPages(with: state.slides)
         }
@@ -453,21 +466,27 @@ public final class CarouselBridgeView: UIView, BridgeView {
     // MARK: - 页卡片
 
     private func makePage(for slide: CarouselSlide) -> UIView {
-        // 整页容器：frame 排版（layoutSubviews 按页宽摆放），只裁边
+        // 主题：makePage 只被 rebuildPages 调用（apply 之内），活取当前生效主题，
+        // 换肤后 apply 的 themeChanged 强制 rebuildPages → 这里必然重跑。
+        let theme = resolvedTheme()
+
+        // 整页容器：frame 排版（layoutSubviews 按页宽摆放），只裁边。
+        // 无障碍：不给 page 容器设 isAccessibilityElement=true（会盖掉内部文本），
+        // 内部 title/subtitle 是 UILabel 子视图，VoiceOver 默认逐标签可达，仅此确认即可。
         let page = UIView().chain()
             .clipsToBounds(true)
             .build()
 
         // 卡片：tone 浅底 + 圆角；两侧留缝走下方 SnapKit
         let card = UIView().chain()
-            .backgroundColor(ComponentPalette.softBackground(for: slide.tone))
+            .backgroundColor(theme.softBackground(for: slide.tone))
             .cornerRadius(12)
             .added(to: page)
             .build()
 
         let titleLabel = UILabel().chain()
             .font(ComponentTypography.carouselTitleFont())
-            .textColor(ComponentPalette.color(for: slide.tone))
+            .textColor(theme.color(for: slide.tone))
             .textAlignment(.center)
             .text(slide.title)
             .added(to: card)

@@ -101,6 +101,11 @@ public final class AvatarBridgeView: UIView, BridgeView {
     /// 意图回调：本组件纯展示，目前无事件来源，保留通道便于扩展。
     public var onIntent: ((NoIntent) -> Void)?
 
+    /// 每桥主题覆盖（运行时换肤）。nil = 回落全局 `ComponentTheme.current`。
+    public var theme: (any BridgeTheme)?
+    /// 上次解析生效的主题缓存：变化时强制重绘颜色（themeChanged）。
+    private var cachedTheme: ComponentTheme?
+
     private let imageView = UIImageView()
     private let initialsLabel = UILabel()
     private let statusDot = UIView()
@@ -114,6 +119,11 @@ public final class AvatarBridgeView: UIView, BridgeView {
             .clipsToBounds(true)
             .backgroundColor(.systemGray5)
 
+        // 无障碍：整个头像是一个读屏元素（label 由 apply 随 title 更新），
+        // 头像内的 imageView / initialsLabel / statusDot 均被容器吸收、不单独暴露。
+        isAccessibilityElement = true
+        accessibilityTraits = [.image]
+
         // 头像图：拉伸填满；尺寸撑满容器走下方 SnapKit（translates 由它自动接管）
         imageView.chain()
             .contentMode(.scaleAspectFill)
@@ -126,8 +136,8 @@ public final class AvatarBridgeView: UIView, BridgeView {
 
         // 右下角状态点：10pt + 2pt 白环；锚在 bounds 内（父视图开了 clipsToBounds，
         // 探出边缘会被裁掉，所以内缩 2pt 而不是挂在角上）。
+        // 底色不在这里写死：由 apply 用 resolvedTheme() 按 statusDotTone 解析（主题化）。
         statusDot.chain()
-            .backgroundColor(ComponentPalette.color(for: .success))
             .cornerRadius(ComponentMetrics.avatarStatusDotSize() / 2)
             .border(ComponentMetrics.avatarStatusDotRing(), color: .white)
             .isHidden(true)
@@ -168,12 +178,18 @@ public final class AvatarBridgeView: UIView, BridgeView {
 
     /// 把 State 快照差异映射到视图上。
     public func apply(_ state: AvatarState) {
+        // 主题解析：每桥覆盖优先，否则回落全局 current；themeChanged 时强制重绘颜色
+        let theme = resolvedTheme()
+        let themeChanged = (cachedTheme != theme)
+        cachedTheme = theme
         let prev = cached
         cached = state
 
         if prev?.title != state.title {
             initialsLabel.text = String(state.title.prefix(1)).uppercased()
             initialsLabel.font = ComponentTypography.initialsFont(dimension: state.dimension)
+            // 单元素读屏：label 用完整姓名（首字母只是视觉占位）；空标题回退系统默认
+            accessibilityLabel = state.title.isEmpty ? nil : state.title
         }
         if prev?.image !== state.image {
             imageView.image = state.image
@@ -189,12 +205,12 @@ public final class AvatarBridgeView: UIView, BridgeView {
         if prev?.shape != state.shape {
             setNeedsLayout()
         }
-        if prev?.borderWidth != state.borderWidth || prev?.borderTone != state.borderTone {
+        if themeChanged || prev?.borderWidth != state.borderWidth || prev?.borderTone != state.borderTone {
             layer.borderWidth = state.borderWidth
-            layer.borderColor = state.borderTone.map { ComponentPalette.color(for: $0).cgColor }
+            layer.borderColor = state.borderTone.map { theme.color(for: $0).cgColor }
         }
-        if prev?.statusDotTone != state.statusDotTone {
-            statusDot.backgroundColor = ComponentPalette.color(for: state.statusDotTone)
+        if themeChanged || prev?.statusDotTone != state.statusDotTone {
+            statusDot.backgroundColor = theme.color(for: state.statusDotTone)
         }
         if prev?.showsStatusDot != state.showsStatusDot {
             statusDot.isHidden = !state.showsStatusDot

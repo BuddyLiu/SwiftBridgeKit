@@ -92,6 +92,8 @@ public final class OTPFieldBridgeView: UIView, BridgeView, UITextFieldDelegate {
     /// 满格完成只回调一次：再填满（清空后重输）会重新触发。
     private var completionArchived = false
     private var cached: OTPFieldState?
+    /// 上次生效主题：换肤重放 apply 时强制重渲染所有格子。
+    private var cachedTheme: ComponentTheme?
 
     /// 构造组件：搭好透明隐藏域与初始格子栈。
     /// - Parameters:
@@ -111,6 +113,10 @@ public final class OTPFieldBridgeView: UIView, BridgeView, UITextFieldDelegate {
             .added(to: self)
         // 短信验证码自动填充（one time code）：ChainKit 无此方法，直写
         field.textContentType = .oneTimeCode
+
+        // 无障碍：只暴露隐藏域一个聚焦元素（格子/容器不设元素，避免抢焦点、挡数字键盘）
+        field.isAccessibilityElement = true
+        field.accessibilityLabel = "验证码"
 
         field.snp.makeConstraints { make in
             make.edges.equalTo(self)
@@ -138,6 +144,9 @@ public final class OTPFieldBridgeView: UIView, BridgeView, UITextFieldDelegate {
     /// - Parameters:
     ///   - state: 最新的验证码输入框状态。
     public func apply(_ state: OTPFieldState) {
+        let theme = resolvedTheme()
+        let themeChanged = (cachedTheme != theme)
+        cachedTheme = theme
         let prev = cached
         cached = state
 
@@ -151,7 +160,8 @@ public final class OTPFieldBridgeView: UIView, BridgeView, UITextFieldDelegate {
             lastReported = state.value
             renderBoxes()
         }
-        if prev?.tone != state.tone || prev?.isSecure != state.isSecure {
+        // 主题化：换肤或色调/遮盖变化 → 重渲染所有格子（renderBoxes 不必然每次 apply 被调）
+        if themeChanged || prev?.tone != state.tone || prev?.isSecure != state.isSecure {
             renderBoxes()
         }
         if field.isEnabled != state.isEnabled {
@@ -253,7 +263,9 @@ public final class OTPFieldBridgeView: UIView, BridgeView, UITextFieldDelegate {
     private func renderBoxes() {
         let text = field.text ?? ""
         let count = boxes.count
-        let toneColor = ComponentPalette.color(for: cached?.tone ?? .primary)
+        // 主题化：字符/边框/高亮底色全部走 resolvedTheme()
+        let toneColor = resolvedTheme().color(for: cached?.tone ?? .primary)
+        let softColor = resolvedTheme().softBackground(for: cached?.tone ?? .primary)
         let showsDot = cached?.isSecure ?? false
         let dimmed = (cached?.isEnabled ?? true) ? 1 : 0.4
 
@@ -270,7 +282,7 @@ public final class OTPFieldBridgeView: UIView, BridgeView, UITextFieldDelegate {
             label.textColor = toneColor
             label.font = ComponentTypography.otpFont()
             box.layer.borderColor = isNext ? toneColor.cgColor : UIColor.separator.cgColor
-            box.backgroundColor = isNext ? ComponentPalette.softBackground(for: cached?.tone ?? .primary) : .clear
+            box.backgroundColor = isNext ? softColor : .clear
             box.alpha = dimmed
         }
     }

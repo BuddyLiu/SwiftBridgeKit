@@ -101,6 +101,10 @@ public final class IndexBarBridgeView: UIView, BridgeView {
     private var highlightedIndex: Int?
     /// 上报去重水印：字母没变就不上报。
     private var lastReported: String?
+    /// 读屏可调档的当前下标：与拖动高亮独立维护（增减一档后直接上报，不依赖呈现态收敛）。
+    private var a11yIndex: Int = 0
+    /// 上次生效主题：换肤重放 apply 时重染 label 栈。
+    private var cachedTheme: ComponentTheme?
     private var cached: IndexBarState?
 
     /// 构造组件：按默认 A–Z 建好 label 栈（帧在 layoutSubviews 里竖排均分）。
@@ -108,6 +112,10 @@ public final class IndexBarBridgeView: UIView, BridgeView {
     ///   - frame: 初始 frame。
     override public init(frame: CGRect) {
         super.init(frame: frame)
+        // 无障碍：容器单元素 + 可调档（读屏上下滑逐字母，走与拖动相同的上报路径）
+        isAccessibilityElement = true
+        accessibilityLabel = "字母索引"
+        accessibilityTraits = [.adjustable]
         rebuildLabels(count: currentItems.count)
     }
 
@@ -137,6 +145,9 @@ public final class IndexBarBridgeView: UIView, BridgeView {
     /// - Parameters:
     ///   - state: 最新的字母索引条状态。
     public func apply(_ state: IndexBarState) {
+        let theme = resolvedTheme()
+        let themeChanged = (cachedTheme != theme)
+        cachedTheme = theme
         let prev = cached
         cached = state
 
@@ -145,10 +156,13 @@ public final class IndexBarBridgeView: UIView, BridgeView {
             rebuildLabels(count: state.items.count)
             highlightedIndex = nil
             lastReported = nil
+            // 读屏档位钳回新条目范围（沿用旧档位，尽量贴近用户位置）
+            a11yIndex = min(a11yIndex, max(state.items.count - 1, 0))
             updateHighlight()
             invalidateIntrinsicContentSize()
         }
-        if prev?.tone != state.tone || prev?.activeTone != state.activeTone {
+        // 主题化：换肤或双色调变化 → 重染全部 label（同一条重染路径）
+        if themeChanged || prev?.tone != state.tone || prev?.activeTone != state.activeTone {
             updateHighlight()
         }
         if isUserInteractionEnabled != state.isEnabled {
@@ -195,11 +209,35 @@ public final class IndexBarBridgeView: UIView, BridgeView {
         highlightedIndex = index
         updateHighlight()
         feedback.impactOccurred()
+        reportItem(at: index)
+    }
 
+    /// 上报当前条目（拖动手势与读屏可调档共用）：字母没变就不上报（去重水印）。
+    private func reportItem(at index: Int) {
         let item = currentItems[index]
         guard lastReported != item else { return }
         lastReported = item
         onIntent?(.changed(item))
+    }
+
+    // MARK: - 无障碍（读屏可调档）
+
+    /// 上滑 → 下一个字母。
+    override public func accessibilityIncrement() {
+        adjustA11yIndex(by: 1)
+    }
+
+    /// 下滑 → 上一个字母。
+    override public func accessibilityDecrement() {
+        adjustA11yIndex(by: -1)
+    }
+
+    /// 读屏档位前后移一格（越界钳制），随后走与拖动相同的上报路径。
+    private func adjustA11yIndex(by delta: Int) {
+        guard !currentItems.isEmpty else { return }
+        let next = min(max(a11yIndex + delta, 0), currentItems.count - 1)
+        a11yIndex = next
+        reportItem(at: a11yIndex)
     }
 
     /// 重建 label 栈：条目文本 + 常态样式；帧高度在 layoutSubviews 里算。
@@ -207,7 +245,8 @@ public final class IndexBarBridgeView: UIView, BridgeView {
         for label in labels { label.removeFromSuperview() }
         labels.removeAll()
 
-        let idleColor = ComponentPalette.color(for: cached?.tone ?? .neutral)
+        // 主题化：常态字色走 resolvedTheme()
+        let idleColor = resolvedTheme().color(for: cached?.tone ?? .neutral)
         for i in 0..<max(count, 0) {
             let label = UILabel()
             label.chain()
@@ -222,8 +261,9 @@ public final class IndexBarBridgeView: UIView, BridgeView {
 
     /// 高亮同步：当前下标加大字号 + 激活色，其余常态。
     private func updateHighlight() {
-        let activeColor = ComponentPalette.color(for: cached?.activeTone ?? .primary)
-        let idleColor = ComponentPalette.color(for: cached?.tone ?? .neutral)
+        // 主题化：激活色 / 常态色全部走 resolvedTheme()
+        let activeColor = resolvedTheme().color(for: cached?.activeTone ?? .primary)
+        let idleColor = resolvedTheme().color(for: cached?.tone ?? .neutral)
         let activeFont = UIFont.systemFont(ofSize: ComponentTypography.indexBarFont().pointSize + 3, weight: .bold)
         for (i, label) in labels.enumerated() {
             let isActive = highlightedIndex == i

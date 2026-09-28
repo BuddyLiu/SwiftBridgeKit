@@ -81,6 +81,9 @@ public final class PickerWheelBridgeView: UIView, BridgeView, UIPickerViewDataSo
     /// 意图上抛回调：各列选中行变化。
     public var onIntent: ((PickerWheelIntent) -> Void)?
 
+    /// 每桥主题覆盖（运行时换肤）；`resolvedTheme()` = 本属性 ?? 全局 current。
+    public var theme: (any BridgeTheme)?
+
     /// internal（非 private）：留给 @testable 冒烟测试校验 selectRow 落位用。
     let picker = UIPickerView()
     /// 数据源快照：apply 先落库再差分驱动轮盘（didSelect/数据查询都读它）。
@@ -88,6 +91,8 @@ public final class PickerWheelBridgeView: UIView, BridgeView, UIPickerViewDataSo
     /// 上报去重水印：各列行号没变就不上报。
     private var lastReported: [Int]?
     private var cached: PickerWheelState?
+    /// 最近一次生效的主题缓存：主题变化时强制颜色字段重绘。
+    private var cachedTheme: ComponentTheme?
 
     /// 构造组件：数据源/代理接自己，铺满宿主。
     /// - Parameters:
@@ -121,6 +126,10 @@ public final class PickerWheelBridgeView: UIView, BridgeView, UIPickerViewDataSo
     /// - Parameters:
     ///   - state: 最新的滚轮选择器状态。
     public func apply(_ state: PickerWheelState) {
+        // 主题解析：每桥 override → 全局 current；主题变化强制颜色字段重绘
+        let theme = resolvedTheme()
+        let themeChanged = (cachedTheme != theme)
+        cachedTheme = theme
         let prev = cached
         cached = state
 
@@ -134,8 +143,8 @@ public final class PickerWheelBridgeView: UIView, BridgeView, UIPickerViewDataSo
             // 逐列差异才 selectRow（程序化不回抛 didSelectRow → 天然防环）
             placeSelectedRows(state.selectedRows)
         }
-        if prev?.tone != state.tone {
-            picker.tintColor = ComponentPalette.color(for: state.tone)
+        if themeChanged || prev?.tone != state.tone {
+            picker.tintColor = resolvedTheme().color(for: state.tone)
         }
         if picker.isUserInteractionEnabled != state.isEnabled {
             picker.isUserInteractionEnabled = state.isEnabled

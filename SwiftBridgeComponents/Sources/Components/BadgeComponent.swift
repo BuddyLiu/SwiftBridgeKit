@@ -76,6 +76,11 @@ public final class BadgeBridgeView: UIView, BridgeView {
     /// 意图回调：本组件纯展示，保留通道便于扩展。
     public var onIntent: ((NoIntent) -> Void)?
 
+    /// 每桥主题覆盖（运行时换肤）。nil = 回落全局 `ComponentTheme.current`。
+    public var theme: (any BridgeTheme)?
+    /// 上次解析生效的主题缓存：变化时强制重绘颜色（themeChanged）。
+    private var cachedTheme: ComponentTheme?
+
     private let label = UILabel()
     private let dot = UIView()
     private var cached: BadgeState?
@@ -84,6 +89,9 @@ public final class BadgeBridgeView: UIView, BridgeView {
     override public init(frame: CGRect) {
         super.init(frame: frame)
         self.chain().clipsToBounds(true)
+
+        // 无障碍：整个徽章是一个读屏元素（label 由 apply 随角标文案更新）
+        isAccessibilityElement = true
 
         label.chain()
             .font(ComponentTypography.badgeFont())
@@ -142,16 +150,22 @@ public final class BadgeBridgeView: UIView, BridgeView {
 
     /// 把 State 快照差异映射到视图上。
     public func apply(_ state: BadgeState) {
+        // 主题解析：每桥覆盖优先，否则回落全局 current；themeChanged 时强制重绘颜色
+        let theme = resolvedTheme()
+        let themeChanged = (cachedTheme != theme)
+        cachedTheme = theme
         let prev = cached
         cached = state
 
         if prev?.text != state.text || prev?.maxValue != state.maxValue {
             label.text = displayText()
+            // 单元素读屏：读出角标上实际展示的文案（含 "99+" 截断）
+            accessibilityLabel = displayText()
             invalidateIntrinsicContentSize()
         }
-        if prev?.tone != state.tone {
-            let color = ComponentPalette.color(for: state.tone)
-            backgroundColor = ComponentPalette.softBackground(for: state.tone)
+        if themeChanged || prev?.tone != state.tone {
+            let color = theme.color(for: state.tone)
+            backgroundColor = theme.softBackground(for: state.tone)
             label.textColor = color
             dot.backgroundColor = color
         }

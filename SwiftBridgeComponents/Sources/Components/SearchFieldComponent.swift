@@ -95,7 +95,13 @@ public final class SearchFieldBridgeView: UIView, BridgeView, UISearchBarDelegat
     /// 上行事件回调：文本变化、提交与取消通过它回传调用方。
     public var onIntent: ((SearchFieldIntent) -> Void)?
 
-    private let searchBar = UISearchBar(frame: .zero)
+    /// 每桥主题覆盖（运行时换肤）。nil = 回落全局 `ComponentTheme.current`。
+    public var theme: (any BridgeTheme)?
+    /// 上次解析生效的主题缓存：变化时强制重绘颜色（themeChanged）。
+    private var cachedTheme: ComponentTheme?
+
+    /// internal（非 private）：留给 @testable 冒烟测试校验占位 label / 光标色路径用。
+    let searchBar = UISearchBar(frame: .zero)
     private var debounceTimer: Timer?
     private var pendingText: String?
     private var lastReportedText: String?
@@ -131,6 +137,10 @@ public final class SearchFieldBridgeView: UIView, BridgeView, UISearchBarDelegat
     /// 应用新状态：按字段逐个与上次缓存比对，仅对变化的字段回写 searchBar。
     /// - Note: 文本回写带输入保护（未在编辑时才写），并会作废挂起的防抖 Timer。
     public func apply(_ state: SearchFieldState) {
+        // 主题解析：每桥覆盖优先，否则回落全局 current；themeChanged 时强制重绘颜色
+        let theme = resolvedTheme()
+        let themeChanged = (cachedTheme != theme)
+        cachedTheme = theme
         let prev = cached
         cached = state
 
@@ -146,9 +156,11 @@ public final class SearchFieldBridgeView: UIView, BridgeView, UISearchBarDelegat
         }
         if prev?.placeholder != state.placeholder {
             searchBar.placeholder = state.placeholder
+            // 无障碍：用占位文案作搜索框 label（为空时保留系统默认行为）
+            searchBar.accessibilityLabel = state.placeholder.isEmpty ? nil : state.placeholder
         }
-        if prev?.tone != state.tone {
-            searchBar.tintColor = ComponentPalette.color(for: state.tone)
+        if themeChanged || prev?.tone != state.tone {
+            searchBar.tintColor = theme.color(for: state.tone)
         }
         if prev?.showsCancelButton != state.showsCancelButton {
             searchBar.setShowsCancelButton(state.showsCancelButton, animated: true)

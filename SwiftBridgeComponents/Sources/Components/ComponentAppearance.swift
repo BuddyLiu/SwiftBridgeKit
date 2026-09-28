@@ -77,48 +77,37 @@ public enum ActivityIndicatorSize: Hashable, CaseIterable {
 
 // MARK: - UIKit 映射（internal，仅本模块视图用）
 
+/// 静态壳：读取全局 `ComponentTheme.current`。换肤只动主题，本文件一行不改。
+///
+/// 这层是「全局注入」的免费收益 —— 既有 ~50 个 `ComponentPalette.*` 调用点
+/// 无需改动就获得：全局主题生效 + 系统暗黑自动切换（动态色）。
+/// 每桥 override 不经过这里：组件在地 apply 里用 `theme.color(for:)` 等实例方法解析。
+/// 读全局 `current`（@MainActor 静态属性），故本壳整体标 @MainActor。
+@MainActor
 enum ComponentPalette {
 
-    /// 通用色调 → 主题色。
+    /// 通用色调 → 主题色（动态色：随系统亮暗自动切换）。
     static func color(for tone: ComponentTone) -> UIColor {
-        switch tone {
-        case .neutral:  return .systemGray
-        case .primary:  return .systemBlue
-        case .success:  return .systemGreen
-        case .warning:  return .systemOrange
-        case .danger:   return .systemRed
-        }
+        ComponentTheme.current.color(for: tone)
     }
 
     /// 主题色的浅色底（Badge 底、状态块底）。
     static func softBackground(for tone: ComponentTone) -> UIColor {
-        color(for: tone).withAlphaComponent(0.14)
+        ComponentTheme.current.softBackground(for: tone)
     }
 
     /// 按钮样式 → (背景色, 前景色)。
     static func buttonColors(for style: ButtonStyle) -> (background: UIColor, foreground: UIColor) {
-        switch style {
-        case .primary:   return (.systemBlue, .white)
-        case .secondary: return (.systemGray5, .label)
-        case .outline:   return (.clear, .systemBlue)
-        case .ghost:     return (.clear, .systemBlue)
-        case .danger:    return (.systemRed, .white)
-        }
+        ComponentTheme.current.buttonColors(for: style)
     }
 
     /// outline 样式的边框色。
-    static func buttonOutlineColor() -> UIColor { .systemBlue }
-    static func buttonDisabledAlpha() -> CGFloat { 0.5 }
+    static func buttonOutlineColor() -> UIColor { ComponentTheme.current.buttonOutlineColor() }
+    static func buttonDisabledAlpha() -> CGFloat { ComponentTheme.current.buttonDisabledAlpha() }
 
-    /// 评分星色。
+    /// 评分星色：`.system` = 宿主强调色（tintColor，动态语义）；其余走主题调色板。
     static func starColor(for tone: RatingStarTone) -> UIColor {
-        switch tone {
-        case .system: return .tintColor
-        case .gold:   return .systemYellow
-        case .purple: return .systemPurple
-        case .teal:   return .systemTeal
-        case .pink:   return .systemPink
-        }
+        ComponentTheme.current.starColor(for: tone)
     }
 }
 

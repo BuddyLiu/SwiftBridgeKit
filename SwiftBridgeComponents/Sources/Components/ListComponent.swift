@@ -129,12 +129,16 @@ public final class ListBridgeView: UIView, BridgeView, UITableViewDelegate {
     /// 事件上报通道：点击行上报 `.selected`，左滑上报 `.swipeAction`。
     public var onIntent: ((ListIntent) -> Void)?
 
-    private let tableView = UITableView(frame: .zero, style: .plain)
+    let tableView = UITableView(frame: .zero, style: .plain)
     /// diffable data source：行模型 Hashable，天然适配 ItemIdentifierType。
     /// 闭包里只做「配置单元格」，不做数据逻辑。
     private var dataSource: UITableViewDiffableDataSource<Int, ListRow>!
     /// 业务回写的最近行快照，供 delegate 回调按 indexPath 取行。
     private var rows: [ListRow] = []
+    /// 每桥主题覆盖（运行时换肤）；`resolvedTheme()` = 本属性 ?? 全局 current。
+    public var theme: (any BridgeTheme)?
+    /// 最近一次生效的主题缓存：主题变化时强制把可见 cell 逐格重画（快照早退吞不掉颜色）。
+    private var cachedTheme: ComponentTheme?
 
     /// 创建列表桥视图：注册 `ListRowCell` 复用并配置 diffable dataSource。
     override public init(frame: CGRect) {
@@ -150,10 +154,11 @@ tableView.chain()
             make.edges.equalToSuperview()
         }
 
-        dataSource = UITableViewDiffableDataSource<Int, ListRow>(tableView: tableView) {
-            tableView, indexPath, row in
+        dataSource = UITableViewDiffableDataSource<Int, ListRow>(tableView: tableView) { [weak self] tableView, indexPath, row in
+            guard let self else { return nil }
             let cell = tableView.dequeueReusableCell(withIdentifier: ListRowCell.reuseID, for: indexPath) as! ListRowCell
-            cell.configure(with: row)
+            // cell 复用期活取当前生效主题（弱捕获 self：复用池与视图不该互相保活）
+            cell.configure(with: row, theme: self.resolvedTheme())
             return cell
         }
     }
@@ -170,16 +175,42 @@ tableView.chain()
 
     // MARK: - BridgeView
 
-    /// 应用新状态：rows 行级早退 + diffable 增量快照（增删移动带系统动画）。
+    /// 应用新状态：rows 行级早退 + diffable 增量快照（增删移动带系统动画）；
+    /// 主题变化时快照早退吞不掉颜色 → 强制把可见 cell 逐格重画。
     public func apply(_ state: ListState) {
-        // 行级早退：rows 集合没变就跳过 snapshot（配合 coordinator 的整体早退，双层防线）
-        guard rows != state.rows else { return }
-        rows = state.rows
+        // 主题解析：每桥 override → 全局 current；变化即 themeChanged（颜色字段强制重绘）
+        let theme = resolvedTheme()
+        let themeChanged = (cachedTheme != theme)
+        cachedTheme = theme
 
-        var snapshot = NSDiffableDataSourceSnapshot<Int, ListRow>()
-        snapshot.appendSections([0])
-        snapshot.appendItems(state.rows)
-        dataSource.apply(snapshot, animatingDifferences: true)
+        // 行级早退：rows 集合没变就跳过 snapshot（配合 coordinator 的整体早退，双层防线）
+        if rows != state.rows {
+            rows = state.rows
+
+            var snapshot = NSDiffableDataSourceSnapshot<Int, ListRow>()
+            snapshot.appendSections([0])
+            snapshot.appendItems(state.rows)
+            dataSource.apply(snapshot, animatingDifferences: true)
+        }
+
+        // 主题变化但行数据没变：diffable 对相同快照不重渲，必须逐格重 configure。
+        // cell 与页面都在 apply 之外复用/重建，cell 的 configure 复用期活取主题，
+        // 这里把可见 cell 全部重放一遍即可换肤；滚动复用的新 cell 由 provider 覆盖。
+        if themeChanged {
+            redrawVisibleCells()
+        }
+    }
+
+    /// 主题变化时强制重画：对可见 cell 逐格重放当前行（复用期活取主题）。
+    private func redrawVisibleCells() {
+        guard dataSource != nil, !rows.isEmpty else { return }
+        let theme = resolvedTheme()
+        for cell in tableView.visibleCells {
+            guard let rowCell = cell as? ListRowCell,
+                  let indexPath = tableView.indexPath(for: rowCell),
+                  indexPath.row < rows.count else { continue }
+            rowCell.configure(with: rows[indexPath.row], theme: theme)
+        }
     }
 
     /// 拆桥：断 delegate/dataSource 并清内部引用，防止复用池在拆桥后回调造成野指针。
@@ -213,7 +244,7 @@ tableView.chain()
                 self?.onIntent?(.swipeAction(row, swipe))
                 completion(true)
             }
-            action.backgroundColor = ComponentPalette.color(for: swipe.tone)
+            action.backgroundColor = resolvedTheme().color(for: swipe.tone)
             return action
         }
         return UISwipeActionsConfiguration(actions: actions)
@@ -224,7 +255,7 @@ tableView.chain()
 
 /// 复用池内自成一格：configure 写入；prepareForReuse 归零，防脏复用。
 @MainActor
-private final class ListRowCell: UITableViewCell {
+final class ListRowCell: UITableViewCell {
 
     static let reuseID = "ListRowCell"
 
@@ -303,12 +334,15 @@ private final class ListRowCell: UITableViewCell {
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
-    func configure(with row: ListRow) {
-        let color = ComponentPalette.color(for: row.tone)
+    /// configure 写入：颜色取自传入主题（桥解析后的当前生效主题），nil 回落全局 current。
+    /// 复用期活取：滚动复用 / themeChanged 逐格重 configure 都会走到这里，换肤即生效。
+    func configure(with row: ListRow, theme: ComponentTheme? = nil) {
+        let resolved = theme ?? ComponentTheme.current
+        let color = resolved.color(for: row.tone)
 
         if let icon = row.leadingIcon {
             iconContainer.isHidden = false
-            iconContainer.backgroundColor = ComponentPalette.softBackground(for: row.tone)
+            iconContainer.backgroundColor = resolved.softBackground(for: row.tone)
             iconView.tintColor = color
             iconView.image = UIImage(systemName: icon)
         } else {
@@ -322,6 +356,19 @@ private final class ListRowCell: UITableViewCell {
         trailingLabel.text = row.trailingText
         trailingLabel.isHidden = row.trailingText == nil
         chevronView.isHidden = !row.showsChevron
+
+        // 无障碍：整行聚合成一个可访问元素 —— title(+subtitle) 作 label、trailingText 作 value；
+        // tone 是配色语义，不入读屏文案。
+        isAccessibilityElement = true
+        accessibilityTraits = [.button]
+        accessibilityLabel = a11yLabelText(for: row)
+        accessibilityValue = row.trailingText
+    }
+
+    /// title + subtitle 的读屏拼接；无 subtitle 时只读 title。
+    private func a11yLabelText(for row: ListRow) -> String {
+        guard let subtitle = row.subtitle, !subtitle.isEmpty else { return row.title }
+        return "\(row.title)，\(subtitle)"
     }
 
     override func prepareForReuse() {
@@ -331,5 +378,9 @@ private final class ListRowCell: UITableViewCell {
         titleLabel.text = nil
         subtitleLabel.text = nil
         trailingLabel.text = nil
+        // 无障碍归零：防脏复用把上一行的 label/value 串到下一行
+        accessibilityLabel = nil
+        accessibilityValue = nil
+        accessibilityTraits = []
     }
 }

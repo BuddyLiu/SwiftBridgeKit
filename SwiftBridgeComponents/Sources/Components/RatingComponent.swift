@@ -195,12 +195,14 @@ public final class RatingBridgeView: UIView, BridgeView {
     // MARK: - 无障碍（读屏可调档）
 
     /// 屏幕朗读用；tone 变化不在此重绘（不归 draw 管）。
+    /// 读屏值带星数分母：半星 `3.0/5`，整星 `3/5`。
     override public var accessibilityValue: String? {
         get {
+            let denominator = Double(max(starCount, 1))
             if allowsHalfSteps {
-                return String(format: "%.1f", rating)
+                return String(format: "%.1f/%.0f", rating, denominator)
             }
-            return String(format: "%.0f", rating)
+            return String(format: "%.0f/%.0f", rating, denominator)
         }
         set {}
     }
@@ -239,7 +241,9 @@ public final class RatingBridgeView: UIView, BridgeView {
 
         let side = min(rect.height, rect.width / CGFloat(starCount))
         let font = UIFont.systemFont(ofSize: side * 0.78)
-        let filledColor = ComponentPalette.starColor(for: starTone)
+        // 主题化：星色走每桥覆盖（resolvedTheme = 桥自带 theme ?? 全局 current）。
+        // Rating 的 apply 无条件 setNeedsDisplay()，换肤时 coordinator 重放 apply → 重绘自动跟上。
+        let filledColor = resolvedTheme().starColor(for: starTone)
         let emptyColor = UIColor.tertiaryLabel
 
         for index in 0..<starCount {

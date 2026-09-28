@@ -85,11 +85,16 @@ public final class PageControlBridgeView: UIView, BridgeView {
     /// 意图上抛回调：页码变化。
     public var onIntent: ((PageControlIntent) -> Void)?
 
+    /// 每桥主题覆盖（运行时换肤）；`resolvedTheme()` = 本属性 ?? 全局 current。
+    public var theme: (any BridgeTheme)?
+
     /// internal（非 private）：留给 @testable 冒烟测试校验 apply 写值用。
     let pageControl = UIPageControl()
     /// 上报去重水印：值没变就不上报，防闭环。
     private var lastReported: Int?
     private var cached: PageControlState?
+    /// 最近一次生效的主题缓存：主题变化时强制颜色字段重绘。
+    private var cachedTheme: ComponentTheme?
 
     /// 构造组件：搭好页码圆点、值变化事件与铺满约束。
     /// - Parameters:
@@ -99,8 +104,7 @@ public final class PageControlBridgeView: UIView, BridgeView {
 
         pageControl.chain()
             .hidesForSinglePage(true)
-            .pageIndicatorTintColor(ComponentPalette.color(for: .neutral))
-            .currentPageIndicatorTintColor(ComponentPalette.color(for: .primary))
+            .accessibilityLabel("页码")
             .target(self, action: #selector(valueChanged), for: .valueChanged)
             .added(to: self)
 
@@ -125,6 +129,10 @@ public final class PageControlBridgeView: UIView, BridgeView {
     /// - Parameters:
     ///   - state: 最新的分页指示器状态。
     public func apply(_ state: PageControlState) {
+        // 主题解析：每桥 override → 全局 current；主题变化强制颜色字段重绘
+        let theme = resolvedTheme()
+        let themeChanged = (cachedTheme != theme)
+        cachedTheme = theme
         let prev = cached
         cached = state
 
@@ -137,11 +145,11 @@ public final class PageControlBridgeView: UIView, BridgeView {
             pageControl.currentPage = state.currentPage
             lastReported = state.currentPage
         }
-        if prev?.tone != state.tone {
-            pageControl.pageIndicatorTintColor = ComponentPalette.color(for: state.tone)
+        if themeChanged || prev?.tone != state.tone {
+            pageControl.pageIndicatorTintColor = resolvedTheme().color(for: state.tone)
         }
-        if prev?.currentTone != state.currentTone {
-            pageControl.currentPageIndicatorTintColor = ComponentPalette.color(for: state.currentTone)
+        if themeChanged || prev?.currentTone != state.currentTone {
+            pageControl.currentPageIndicatorTintColor = resolvedTheme().color(for: state.currentTone)
         }
         if pageControl.hidesForSinglePage != state.hidesForSinglePage {
             pageControl.hidesForSinglePage = state.hidesForSinglePage

@@ -62,15 +62,22 @@ public final class SwitchBridgeView: UIView, BridgeView {
     /// 上行事件回调：开合变化时把新状态回传调用方。
     public var onIntent: ((SwitchIntent) -> Void)?
 
-    private let sw = UISwitch()
+    /// 每桥主题覆盖（运行时换肤）；`resolvedTheme()` = 本属性 ?? 全局 current。
+    public var theme: (any BridgeTheme)?
+
+    /// internal（非 private）：留给 @testable 冒烟测试校验开合态与无障碍 label 用。
+    let sw = UISwitch()
     private var lastReported: Bool?
     private var cached: SwitchState?
+    /// 最近一次生效的主题缓存：主题变化时强制颜色字段重绘。
+    private var cachedTheme: ComponentTheme?
 
     /// 兼容 frame 初始化：事件挂接走链，本体居中由内部 SnapKit 控制，保持 UISwitch 固有尺寸。
     override public init(frame: CGRect) {
         super.init(frame: frame)
         // 事件挂接走链；自身居中由下方 SnapKit 定（translates 自动接管）
         sw.chain()
+            .accessibilityLabel("开关")
             .target(self, action: #selector(valueChanged), for: .valueChanged)
             .added(to: self)
 
@@ -94,6 +101,10 @@ public final class SwitchBridgeView: UIView, BridgeView {
     /// 应用新状态：开合、色调、可用态按缓存逐项差异映射。
     /// - Note: isOn 采用程序化赋值，不会触发 valueChanged，故与用户手势天然区分、无闭环。
     public func apply(_ state: SwitchState) {
+        // 主题解析：每桥 override → 全局 current；主题变化强制颜色字段重绘
+        let theme = resolvedTheme()
+        let themeChanged = (cachedTheme != theme)
+        cachedTheme = theme
         let prev = cached
         cached = state
 
@@ -102,8 +113,8 @@ public final class SwitchBridgeView: UIView, BridgeView {
             sw.isOn = state.isOn
             lastReported = state.isOn
         }
-        if prev?.tone != state.tone {
-            sw.onTintColor = ComponentPalette.color(for: state.tone)
+        if themeChanged || prev?.tone != state.tone {
+            sw.onTintColor = resolvedTheme().color(for: state.tone)
         }
         if prev?.isEnabled != state.isEnabled {
             sw.isEnabled = state.isEnabled

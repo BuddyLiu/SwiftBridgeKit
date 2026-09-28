@@ -80,6 +80,15 @@ public final class EmptyStateBridgeView: UIView, BridgeView {
     /// 意图上抛回调：主 / 次按钮点击。
     public var onIntent: ((EmptyStateIntent) -> Void)?
 
+    /// 每桥主题覆盖（运行时换肤）。nil = 回落全局 `ComponentTheme.current`。
+    public var theme: (any BridgeTheme)?
+    /// 上次解析生效的主题缓存：变化时强制重绘颜色（themeChanged）。
+    private var cachedTheme: ComponentTheme?
+
+    // 无障碍：本组件**不**把容器做成单读屏元素 —— 它可能带「重新加载」等按钮，
+    // 容器做元素会挡住按钮可达性。标题/正文 label 由 UIKit 默认暴露，按钮天然可达，
+    // 这里刻意保持默认，不做 isAccessibilityElement = true。
+
     private let iconView = UIImageView()
     private let titleLabel = UILabel()
     private let messageLabel = UILabel()
@@ -151,6 +160,10 @@ public final class EmptyStateBridgeView: UIView, BridgeView {
     /// - Parameters:
     ///   - state: 最新的空态状态。
     public func apply(_ state: EmptyStateState) {
+        // 主题解析：每桥覆盖优先，否则回落全局 current；themeChanged 时强制重绘颜色
+        let theme = resolvedTheme()
+        let themeChanged = (cachedTheme != theme)
+        cachedTheme = theme
         let prev = cached
         cached = state
 
@@ -164,8 +177,8 @@ public final class EmptyStateBridgeView: UIView, BridgeView {
         if prev?.icon != state.icon {
             iconView.image = UIImage(systemName: state.icon ?? Self.defaultIcon)
         }
-        if prev?.tone != state.tone {
-            let color = ComponentPalette.color(for: state.tone)
+        if themeChanged || prev?.tone != state.tone {
+            let color = theme.color(for: state.tone)
             iconView.tintColor = color
             actionButton.backgroundColor = color
             actionButton.setTitleColor(.white, for: .normal)

@@ -106,10 +106,13 @@ public final class TextFieldBridgeView: UIView, BridgeView, UITextFieldDelegate 
     /// 意图回调：用户输入变化 / 回车提交在此上报给宿主。
     public var onIntent: ((TextFieldIntent) -> Void)?
 
-    private let field = UITextField()
+    /// internal（非 private）：留给 @testable 冒烟测试校验占位符回写 / 无障碍 label。
+    let field = UITextField()
     private let underline = CALayer()
     private var lastReported: String?
     private var cached: TextFieldState?
+    /// 上次生效主题：换肤重放 apply 时强制重建占位符前景色。
+    private var cachedTheme: ComponentTheme?
 
     /// 以 frame 创建桥视图，并完成输入框约束布局、事件源与代理挂接。
     override public init(frame: CGRect) {
@@ -125,6 +128,8 @@ public final class TextFieldBridgeView: UIView, BridgeView, UITextFieldDelegate 
             .target(self, action: #selector(editingChanged), for: .editingChanged)
             .target(self, action: #selector(editingSubmitted), for: .primaryActionTriggered)
             .added(to: self)
+        // 无障碍默认：跟随系统字体缩放（大字体用户受益）
+        field.adjustsFontForContentSizeCategory = true
 
         field.snp.makeConstraints { make in
             make.top.equalTo(self).offset(6)
@@ -156,16 +161,27 @@ public final class TextFieldBridgeView: UIView, BridgeView, UITextFieldDelegate 
     ///
     /// 对应映射见文件头「差异映射字段清单」。
     public func apply(_ state: TextFieldState) {
+        let theme = resolvedTheme()
+        let themeChanged = (cachedTheme != theme)
+        cachedTheme = theme
         let prev = cached
         cached = state
+
+        let placeholderChanged = prev?.placeholder != state.placeholder
+        let placeholderToneChanged = prev?.placeholderTone != state.placeholderTone
 
         // ⚠️ 输入保护：正在编辑时绝不回写（否则每次 apply 都抢光标、打断输入）
         if !field.isFirstResponder, field.text != state.text {
             field.text = state.text
             lastReported = state.text
         }
-        if prev?.placeholder != state.placeholder || prev?.placeholderTone != state.placeholderTone {
-            let color = ComponentPalette.color(for: state.placeholderTone).withAlphaComponent(0.5)
+        // 无障碍：占位文案非空 → 读屏 label 用占位文案（placeholder 变才写，别每帧写）
+        if placeholderChanged {
+            field.accessibilityLabel = state.placeholder.isEmpty ? nil : state.placeholder
+        }
+        // 主题化：占位符前景色走 resolvedTheme()；换肤重放 apply 时用 themeChanged 强刷
+        if themeChanged || placeholderChanged || placeholderToneChanged {
+            let color = resolvedTheme().color(for: state.placeholderTone).withAlphaComponent(0.5)
             field.attributedPlaceholder = NSAttributedString(
                 string: state.placeholder,
                 attributes: [.foregroundColor: color, .font: field.font ?? ComponentTypography.fieldFont()]

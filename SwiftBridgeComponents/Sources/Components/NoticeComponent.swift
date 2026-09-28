@@ -82,6 +82,11 @@ public final class NoticeBridgeView: UIView, BridgeView {
     /// 事件上报通道：`.close` 与 `.autoDismissed`。
     public var onIntent: ((NoticeIntent) -> Void)?
 
+    /// 每桥主题覆盖（运行时换肤）。nil = 回落全局 `ComponentTheme.current`。
+    public var theme: (any BridgeTheme)?
+    /// 上次解析生效的主题缓存：变化时强制重绘颜色（themeChanged）。
+    private var cachedTheme: ComponentTheme?
+
     private let iconView = UIImageView()
     private let titleLabel = UILabel()
     private let messageLabel = UILabel()
@@ -93,6 +98,9 @@ public final class NoticeBridgeView: UIView, BridgeView {
     override public init(frame: CGRect) {
         super.init(frame: frame)
         self.chain().clipsToBounds(true).cornerRadius(10)
+
+        // 无障碍：整条横幅是一个读屏元素（label 由 apply 合成标题 + 正文）
+        isAccessibilityElement = true
 
         iconView.chain()
             .contentMode(.scaleAspectFit)
@@ -154,21 +162,27 @@ public final class NoticeBridgeView: UIView, BridgeView {
 
     /// 应用新状态：逐字段差分，文案变化时 invalidate 高度布局。
     public func apply(_ state: NoticeState) {
+        // 主题解析：每桥覆盖优先，否则回落全局 current；themeChanged 时强制重绘颜色
+        let theme = resolvedTheme()
+        let themeChanged = (cachedTheme != theme)
+        cachedTheme = theme
         let prev = cached
         cached = state
 
         if prev?.title != state.title {
             titleLabel.text = state.title
+            syncAccessibility(state)
         }
         if prev?.message != state.message {
             messageLabel.text = state.message
             messageLabel.isHidden = state.message == nil
             invalidateIntrinsicContentSize()
             setNeedsLayout()
+            syncAccessibility(state)
         }
-        if prev?.tone != state.tone {
-            let color = ComponentPalette.color(for: state.tone)
-            backgroundColor = ComponentPalette.softBackground(for: state.tone)
+        if themeChanged || prev?.tone != state.tone {
+            let color = theme.color(for: state.tone)
+            backgroundColor = theme.softBackground(for: state.tone)
             titleLabel.textColor = color
             iconView.tintColor = color
         }
@@ -178,9 +192,19 @@ public final class NoticeBridgeView: UIView, BridgeView {
         }
         if prev?.showsClose != state.showsClose {
             closeButton.isHidden = !state.showsClose
+            syncAccessibility(state)
         }
         if prev?.autoDismissAfter != state.autoDismissAfter {
             updateTimer(state.autoDismissAfter)
+        }
+    }
+
+    /// 单元素读屏：把标题 + 正文合成一条 label，供 VoiceOver 一次读完。
+    private func syncAccessibility(_ state: NoticeState) {
+        if let message = state.message, !message.isEmpty {
+            accessibilityLabel = state.title + "，" + message
+        } else {
+            accessibilityLabel = state.title
         }
     }
 

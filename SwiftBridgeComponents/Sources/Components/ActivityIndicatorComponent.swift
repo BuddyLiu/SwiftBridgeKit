@@ -64,9 +64,14 @@ public final class ActivityIndicatorBridgeView: UIView, BridgeView {
     /// 意图上抛回调：本组件不产生意图，占位以满足协议。
     public var onIntent: ((NoIntent) -> Void)?
 
+    /// 每桥主题覆盖（运行时换肤）；`resolvedTheme()` = 本属性 ?? 全局 current。
+    public var theme: (any BridgeTheme)?
+
     /// internal（非 private）：留给 @testable 冒烟测试校验起停 / 尺寸路径用。
     let spinner: UIActivityIndicatorView
     private var cached: ActivityIndicatorState?
+    /// 最近一次生效的主题缓存：主题变化时强制颜色字段重绘。
+    private var cachedTheme: ComponentTheme?
 
     /// 构造组件：搭好转圈本体（默认 medium、主色、停止隐藏）与居中约束。
     /// - Parameters:
@@ -77,8 +82,12 @@ public final class ActivityIndicatorBridgeView: UIView, BridgeView {
 
         spinner.chain()
             .hidesWhenStopped(true)
-            .color(ComponentPalette.color(for: .primary))
             .added(to: self)
+
+        // 无障碍：容器单元素（转圈语义统一收敛到容器，VoiceOver 只读一次）
+        isAccessibilityElement = true
+        accessibilityLabel = "加载中"
+        accessibilityTraits = [.updatesFrequently]
 
         spinner.snp.makeConstraints { make in
             make.centerX.equalTo(self)
@@ -102,6 +111,10 @@ public final class ActivityIndicatorBridgeView: UIView, BridgeView {
     /// - Parameters:
     ///   - state: 最新的加载指示器状态。
     public func apply(_ state: ActivityIndicatorState) {
+        // 主题解析：每桥 override → 全局 current；主题变化强制颜色字段重绘
+        let theme = resolvedTheme()
+        let themeChanged = (cachedTheme != theme)
+        cachedTheme = theme
         let prev = cached
         cached = state
 
@@ -115,8 +128,9 @@ public final class ActivityIndicatorBridgeView: UIView, BridgeView {
         if prev?.size != state.size {
             spinner.style = state.size.uiStyle
         }
-        if prev?.tone != state.tone {
-            spinner.color = ComponentPalette.color(for: state.tone)
+        // 初始 apply 必走：prev 为 nil → 条件恒真，挪进 apply 的赋色首帧即生效
+        if themeChanged || prev?.tone != state.tone {
+            spinner.color = resolvedTheme().color(for: state.tone)
         }
         if prev?.hidesWhenStopped != state.hidesWhenStopped {
             spinner.hidesWhenStopped = state.hidesWhenStopped

@@ -87,12 +87,17 @@ public final class DatePickerBridgeView: UIView, BridgeView {
     /// 意图上抛回调：日期 / 倒计时变化。
     public var onIntent: ((DatePickerIntent) -> Void)?
 
+    /// 每桥主题覆盖（运行时换肤）；`resolvedTheme()` = 本属性 ?? 全局 current。
+    public var theme: (any BridgeTheme)?
+
     /// internal（非 private）：留给 @testable 冒烟测试校验 apply 写值用。
     let picker = UIDatePicker()
     /// 上报去重水印：日期一个、倒计时一个，值没变就不上报。
     private var lastReportedDate: Date?
     private var lastReportedDuration: TimeInterval?
     private var cached: DatePickerState?
+    /// 最近一次生效的主题缓存：主题变化时强制颜色字段重绘。
+    private var cachedTheme: ComponentTheme?
 
     /// 构造组件：搭好 compact 选择器、值变化事件与边缘约束。
     /// - Parameters:
@@ -103,6 +108,7 @@ public final class DatePickerBridgeView: UIView, BridgeView {
         picker.chain()
             .datePickerMode(.date)
             .preferredDatePickerStyle(.compact)
+            .accessibilityLabel("日期选择")
             .target(self, action: #selector(valueChanged), for: .valueChanged)
             .added(to: self)
 
@@ -127,6 +133,10 @@ public final class DatePickerBridgeView: UIView, BridgeView {
     /// - Parameters:
     ///   - state: 最新的日期选择器状态。
     public func apply(_ state: DatePickerState) {
+        // 主题解析：每桥 override → 全局 current；主题变化强制颜色字段重绘
+        let theme = resolvedTheme()
+        let themeChanged = (cachedTheme != theme)
+        cachedTheme = theme
         let prev = cached
         cached = state
 
@@ -145,8 +155,8 @@ public final class DatePickerBridgeView: UIView, BridgeView {
             lastReportedDate = state.date
         }
 
-        if prev?.tone != state.tone {
-            picker.tintColor = ComponentPalette.color(for: state.tone)
+        if themeChanged || prev?.tone != state.tone {
+            picker.tintColor = resolvedTheme().color(for: state.tone)
         }
         if picker.isEnabled != state.isEnabled { picker.isEnabled = state.isEnabled }
     }

@@ -91,6 +91,11 @@ public final class TextViewBridgeView: UIView, BridgeView, UITextViewDelegate {
     /// 意图上抛回调：文本变化。
     public var onIntent: ((TextViewIntent) -> Void)?
 
+    /// 每桥主题覆盖（运行时换肤）。nil = 回落全局 `ComponentTheme.current`。
+    public var theme: (any BridgeTheme)?
+    /// 上次解析生效的主题缓存：变化时强制重绘颜色（themeChanged）。
+    private var cachedTheme: ComponentTheme?
+
     /// internal（非 private）：留给 @testable 冒烟测试校验占位符 / 文本路径用。
     let textView = UITextView()
     private let placeholderLabel = UILabel()
@@ -104,6 +109,9 @@ public final class TextViewBridgeView: UIView, BridgeView, UITextViewDelegate {
     ///   - frame: 初始 frame。
     override public init(frame: CGRect) {
         super.init(frame: frame)
+
+        // 无障碍：随系统字体大小缩放（动态字体）；label 由 apply 用占位文案填充
+        textView.adjustsFontForContentSizeCategory = true
 
         // 占位符是叠在 textView 内部的子视图：随滑动区域移动、与文字起点对齐
         textView.chain()
@@ -146,6 +154,10 @@ public final class TextViewBridgeView: UIView, BridgeView, UITextViewDelegate {
     ///
     /// 对应映射见文件头「差异映射字段清单」。
     public func apply(_ state: TextViewState) {
+        // 主题解析：每桥覆盖优先，否则回落全局 current；themeChanged 时强制重绘颜色
+        let theme = resolvedTheme()
+        let themeChanged = (cachedTheme != theme)
+        cachedTheme = theme
         let prev = cached
         cached = state
 
@@ -155,10 +167,12 @@ public final class TextViewBridgeView: UIView, BridgeView, UITextViewDelegate {
             lastReported = state.text
             syncPlaceholder()
         }
-        if prev?.placeholder != state.placeholder || prev?.placeholderTone != state.placeholderTone {
-            let color = ComponentPalette.color(for: state.placeholderTone).withAlphaComponent(0.5)
+        if themeChanged || prev?.placeholder != state.placeholder || prev?.placeholderTone != state.placeholderTone {
+            let color = theme.color(for: state.placeholderTone).withAlphaComponent(0.5)
             placeholderLabel.text = state.placeholder
             placeholderLabel.textColor = color
+            // 无障碍：占位文案作多行输入框的 label（为空时不覆盖系统默认）
+            textView.accessibilityLabel = state.placeholder.isEmpty ? nil : state.placeholder
             syncPlaceholder()
         }
         if prev?.border != state.border {

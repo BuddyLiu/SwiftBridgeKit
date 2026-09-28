@@ -57,9 +57,14 @@ public final class ProgressBarBridgeView: UIView, BridgeView {
     /// 事件上报通道：展示型组件无事件，保留以适配 BridgeView 协议。
     public var onIntent: ((NoIntent) -> Void)?
 
+    /// 每桥主题覆盖（运行时换肤）；`resolvedTheme()` = 本属性 ?? 全局 current。
+    public var theme: (any BridgeTheme)?
+
     private let progressView = UIProgressView(progressViewStyle: .default)
     private let spinner = UIActivityIndicatorView(style: .medium)
     private var cached: ProgressBarState?
+    /// 最近一次生效的主题缓存：主题变化时强制颜色字段重绘。
+    private var cachedTheme: ComponentTheme?
 
     /// 创建进度条桥视图：容器裁 pill 圆角，内部放 UIProgressView 与转圈。
     override public init(frame: CGRect) {
@@ -70,6 +75,10 @@ public final class ProgressBarBridgeView: UIView, BridgeView {
         self.chain()
             .clipsToBounds(true)
             .cornerRadius(height / 2)
+            // 无障碍：容器单元素（进度内容收敛为一个 VoiceOver 元素），值随 apply 维护
+            .isAccessibilityElement(true)
+            .accessibilityLabel("进度")
+            .accessibilityTraits([.updatesFrequently])
 
         progressView.chain()
             .added(to: self)
@@ -100,18 +109,27 @@ public final class ProgressBarBridgeView: UIView, BridgeView {
 
     /// 应用新状态：进度首帧直接落位、此后带动画；tone 换色；indeterminate 互斥显隐。
     public func apply(_ state: ProgressBarState) {
+        // 主题解析：每桥 override → 全局 current；主题变化强制颜色字段重绘
+        let theme = resolvedTheme()
+        let themeChanged = (cachedTheme != theme)
+        cachedTheme = theme
         let prev = cached
         cached = state
 
         if prev?.progress != state.progress {
             // 首帧直接落位：避免从 0 滑过去；后续变化带动画
             progressView.setProgress(state.progress, animated: prev != nil)
+            if !state.isIndeterminate {
+                accessibilityValue = "\(Int(state.progress * 100))%"
+            }
         }
-        if prev?.tone != state.tone {
+        if themeChanged || prev?.tone != state.tone {
             applyTone(state.tone)
         }
         if prev?.isIndeterminate != state.isIndeterminate {
             applyIndeterminate(state.isIndeterminate)
+            // 无障碍：value 随形态更新（转圈 = 加载中，否则百分比）
+            accessibilityValue = state.isIndeterminate ? "加载中" : "\(Int(state.progress * 100))%"
         }
     }
 
@@ -124,9 +142,10 @@ public final class ProgressBarBridgeView: UIView, BridgeView {
     // MARK: - 差异映射
 
     private func applyTone(_ tone: ComponentTone) {
-        let color = ComponentPalette.color(for: tone)
+        let theme = resolvedTheme()
+        let color = theme.color(for: tone)
         progressView.progressTintColor = color
-        progressView.trackTintColor = ComponentPalette.softBackground(for: tone)
+        progressView.trackTintColor = theme.softBackground(for: tone)
         spinner.color = color
     }
 
